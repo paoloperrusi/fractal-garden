@@ -1,0 +1,2034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fractal Tree Garden</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+  canvas { display: block; }
+  #hud {
+    position: fixed; top: 14px; left: 14px;
+    color: rgba(255,255,255,0.55);
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    pointer-events: none;
+    line-height: 1.6;
+    user-select: none;
+  }
+  #hud b { color: rgba(255,255,255,0.85); }
+  #hudToggleBtn {
+    pointer-events: auto;
+    margin-top: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.55);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    padding: 3px 7px;
+    cursor: pointer;
+  }
+  #hudToggleBtn:hover { background: rgba(255,255,255,0.15); }
+  #hudToggleBtn.faded {
+    margin-top: 0;
+    background: transparent;
+    border-color: rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.28);
+  }
+  #hudToggleBtn.faded:hover { background: rgba(255,255,255,0.08); }
+  #panel {
+    position: fixed; top: 14px; right: 14px;
+    background: rgba(20,20,22,0.55);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    padding: 0 12px 12px;
+    color: rgba(255,255,255,0.75);
+    font-family: 'Courier New', monospace;
+    font-size: 10.5px;
+    width: 270px;
+    max-height: calc(100vh - 28px);
+    overflow-y: auto;
+  }
+  #panelTabs { display: flex; gap: 4px; margin: 10px 0 10px; position: sticky; top: 0; background: inherit; padding-top: 2px; }
+  #panelTabs button {
+    flex: 1 1 auto;
+    font-family: 'Courier New', monospace;
+    font-size: 10.5px;
+    background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.55);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    padding: 5px 4px;
+    cursor: pointer;
+  }
+  #panelTabs button.active { background: rgba(255,255,255,0.9); color: #111; border-color: rgba(255,255,255,0.9); }
+  #panel .row { margin-bottom: 9px; }
+  #panel .row:last-child { margin-bottom: 0; }
+  #panel label { display: block; margin-bottom: 4px; }
+  #panel .btnrow { display: flex; gap: 4px; flex-wrap: wrap; }
+  #panel #speedRow, #panel #stSpeedRow { gap: 2px; flex-wrap: nowrap; }
+  #panel #speedRow button, #panel #stSpeedRow button {
+    font-size: 9px;
+    padding: 4px 1px;
+    min-width: 0; /* flex items default to min-width:auto (their content's natural width), which blocks shrinking below that even with flex-shrink:1 — this was the other half of why they kept wrapping */
+  }
+  #panel button {
+    font-family: 'Courier New', monospace;
+    font-size: 10.5px;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.75);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 4px;
+    padding: 4px 6px;
+    cursor: pointer;
+    flex: 1 1 auto;
+  }
+  #panel button:hover { background: rgba(255,255,255,0.18); }
+  #panel button.active {
+    background: rgba(255,255,255,0.9);
+    color: #111;
+    border-color: rgba(255,255,255,0.9);
+  }
+  #clearGardenBtn {
+    background: rgba(120,20,20,0.35);
+    border-color: rgba(255,90,90,0.35);
+    color: rgba(255,210,210,0.85);
+  }
+  #clearGardenBtn:hover { background: rgba(150,25,25,0.5); }
+  #genTreeDropdown, #eventDropdown {
+    margin-top: 9px;
+    padding: 8px 0 2px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+  }
+  #genTreeDropdown label, #eventDropdown label, #panel .row label {
+    display: block;
+    margin: 7px 0 4px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+  }
+  #genTreeDropdown label:first-child, #eventDropdown label:first-child { margin-top: 0; }
+  #panel select {
+    width: 100%;
+    font-family: 'Courier New', monospace;
+    font-size: 10.5px;
+    background: #1a1a1e; /* opaque — a transparent overlay only worked for the closed box and left the native option-list popup unstyled/white */
+    color: rgba(255,255,255,0.85);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 4px;
+    padding: 4px 6px;
+  }
+  #panel option {
+    background: #1a1a1e;
+    color: rgba(255,255,255,0.9);
+  }
+  #genTreeSpawnBtn { margin-top: 8px; }
+  #eventGoBtn { margin-top: 8px; }
+  #panel input[type=range] {
+    width: 100%;
+    accent-color: rgba(255,255,255,0.8);
+  }
+  #panel .sliderVal { color: rgba(255,255,255,0.9); float: right; }
+  #eventBanner {
+    display: none;
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    color: rgba(255,255,255,0.85);
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-shadow: 0 0 10px rgba(255,255,255,0.5);
+    pointer-events: none;
+    user-select: none;
+  }
+  #errBanner {
+    display: none;
+    position: fixed; bottom: 12px; left: 12px; right: 12px;
+    color: #ff8080;
+    background: rgba(40,10,10,0.7);
+    border: 1px solid rgba(255,100,100,0.4);
+    border-radius: 5px;
+    padding: 8px 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    pointer-events: none;
+    user-select: text;
+    z-index: 9999;
+  }
+</style>
+</head>
+<body>
+<div id="eventBanner"></div>
+<div id="errBanner"></div>
+<div id="hud">
+  <div id="hudContent">
+    <b>W A S D</b> move<br>
+    <b>Q</b> / <b>E</b> fly up/down (fly mode)<br>
+    <b>Space</b> jump (walk mode)<br>
+    <b>Space Space</b> toggle fly/walk<br>
+    <b>click + drag</b> to look around<br>
+    <b>O</b> full view<br>
+    <b>&uarr;</b> / <b>&darr;</b> growth speed<br>
+    <b>&larr;</b> / <b>&rarr;</b> tree count<br>
+    <span id="treecount"></span><br>
+  </div>
+  <button id="hudToggleBtn">hide guide (H)</button>
+</div>
+<div id="panel">
+  <div id="panelTabs">
+    <button id="tabGardenBtn" class="active">garden</button>
+    <button id="tabSingleTreeBtn">single tree</button>
+  </div>
+
+  <div class="row btnrow">
+    <button id="floorToggleBtn" style="flex:1;">floor</button>
+    <button id="fogToggleBtn" style="flex:1;">fog</button>
+    <button id="windToggleBtn" style="flex:1;">wind</button>
+  </div>
+
+  <div id="gardenTab">
+    <div class="row">
+      <label>speed</label>
+      <div class="btnrow" id="speedRow"></div>
+    </div>
+    <div class="row">
+      <label>max concurrent trees</label>
+      <div class="btnrow" id="countRow"></div>
+    </div>
+    <div class="row">
+      <button id="genTreeBtn" style="width:100%;">+ generate tree</button>
+      <div id="genTreeDropdown" style="display:none;">
+        <label>algorithm</label>
+        <select id="genAlgoSelect"></select>
+        <label>style</label>
+        <select id="genStyleSelect"></select>
+        <button id="genTreeSpawnBtn" style="width:100%;">spawn</button>
+      </div>
+    </div>
+    <div class="row">
+      <button id="specialTreesBtn" style="width:100%;">special trees</button>
+    </div>
+    <div class="row">
+      <button id="clearGardenBtn" style="width:100%;">clear &amp; respawn garden (C)</button>
+    </div>
+    <div class="row">
+      <button id="eventTriggerBtn" style="width:100%;">+ trigger event</button>
+      <div id="eventDropdown" style="display:none;">
+        <label>event</label>
+        <select id="eventSelect"></select>
+        <button id="eventGoBtn" style="width:100%;">trigger</button>
+      </div>
+    </div>
+    <div class="row">
+      <button id="screenshotBtn" style="width:100%;">save screenshot</button>
+    </div>
+    <div class="row btnrow">
+      <button id="flyWalkBtn" style="flex:1;">fly</button>
+      <button id="fullViewBtn" style="flex:1;">full view</button>
+    </div>
+    <div class="row" id="rotateStopRow" style="display:none;">
+      <button id="rotateStopBtn" style="width:100%;">stop rotation</button>
+    </div>
+  </div>
+
+  <div id="singleTreeTab" style="display:none;">
+    <div class="row btnrow">
+      <button id="stSubCreativeBtn" style="flex:1;">creative</button>
+      <button id="stSubRandomBtn" style="flex:1;">random showcase</button>
+    </div>
+    <div class="row">
+      <label>generation speed</label>
+      <div class="btnrow" id="stSpeedRow"></div>
+    </div>
+    <div class="row">
+      <label>algorithm</label>
+      <select id="stAlgoSelect"></select>
+      <label>style</label>
+      <select id="stStyleSelect"></select>
+    </div>
+    <div class="row">
+      <label>branchiness</label>
+      <div class="btnrow" id="stBranchRow"></div>
+    </div>
+    <div class="row">
+      <label>jitter (gnarliness)</label>
+      <div class="btnrow" id="stJitterRow"></div>
+    </div>
+    <div class="row">
+      <label>jitter gradient (low rank &rarr; high rank)</label>
+      <div class="btnrow" id="stGradientRow"></div>
+    </div>
+    <div class="row">
+      <label>max iteration count</label>
+      <div class="btnrow" id="stMaxIterRow"></div>
+    </div>
+    <div class="row">
+      <button id="stRegenBtn" style="width:100%;">regenerate tree (R)</button>
+    </div>
+    <div class="row">
+      <label>rotation speed</label>
+      <div class="btnrow" id="stRotRow"></div>
+    </div>
+    <div class="row">
+      <label>zoom <span class="sliderVal" id="stZoomVal"></span></label>
+      <input type="range" id="stZoomSlider" min="0.15" max="32" step="0.05">
+    </div>
+    <div class="row">
+      <label>angle <span class="sliderVal" id="stAngleVal"></span></label>
+      <input type="range" id="stAngleSlider" min="2" max="88" step="1">
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script>
+
+// ============================================================================
+//  FRACTAL TREE GARDEN — v3
+//  True volumetric branch generation, a baked terrain mesh with a procedural
+//  grey tile texture, a bounded fly camera, two live sliders, and REAL
+//  shadow mapping (hand-rolled: p5.js has no built-in shadow support — see
+//  the chat explanation for how the depth-texture pass + custom shader work).
+// ============================================================================
+
+let camPos, camYaw, camPitch;
+
+// Shows the first caught error on screen (bottom of page) instead of just
+// the console, since a black canvas alone gives no clue what broke.
+let errorShown = false;
+function reportError(msg) {
+  if (errorShown) return;
+  errorShown = true;
+  const el = document.getElementById('errBanner');
+  el.textContent = 'Something failed and was caught so the rest of the scene can keep rendering:\n' + msg;
+  el.style.display = 'block';
+}
+let keys = {};
+
+const WORLD_UP = { x: 0, y: 1, z: 0 }; // standard p5 WEBGL up vector (y grows downward)
+
+// ---- navigable bounds --------------------------------------------------
+const FLOOR_SIZE = 4200;               // much larger world
+const NAV_MARGIN = 90;
+const NAV_LIMIT = FLOOR_SIZE / 2 - NAV_MARGIN;
+const CAM_MAX_HEIGHT = -1500;  // ceiling
+
+// ---- terrain -------------------------------------------------------------
+const FLOOR_DIV = 50;         // scaled up with FLOOR_SIZE to keep facet size similar
+const TERRAIN_AMP = 95;
+const TERRAIN_FREQ = 0.0032;
+const TERRAIN_FREQ2 = 0.011;  // second octave for extra roughness/detail
+
+// ---- floor color (lighting/shadows removed for now) ------------------------
+const FLOOR_BASE_COLOR = [128, 128, 132]; // plain grey, no texture
+
+// ---- fog -------------------------------------------------------------------
+// distances are tuned relative to the world size so they scale if it changes
+const FOG_NEAR = NAV_LIMIT * 0.45;
+const FOG_FAR  = NAV_LIMIT * 1.55;
+
+// ---- "fall"-style tree variants: falling particles ------------------------
+const FALL_GRAVITY = 0.00025; // world units / ms^2
+// per-variant {treeColor, particleColor} — a tree can drop a different
+// color of particle than its own branch color (e.g. the cyan "magic" tree
+// drops gold particles).
+const PARTICLE_VARIANTS = {
+  fall:  { treeColor: [235, 110, 45],  particleColor: [235, 110, 45] },
+  blood: { treeColor: [150, 15, 15],   particleColor: [180, 20, 20] },
+  magic: { treeColor: [70, 220, 230],  particleColor: [255, 205, 90] }
+};
+
+// ---- sim time (drives growth-speed control) --------------------------------
+let simTime = 0;
+let growthSpeed = 1.0;
+let paused = false;
+// Single-tree mode has its own independent clock/speed/pause — deliberately
+// NOT the same as the garden's, so tweaking one never affects the other.
+let stSimTime = 0;
+let stGrowthSpeed = 1;
+let stPaused = false;
+// Whichever clock is relevant for the currently-visible trees this frame —
+// set once per frame in draw(). Growth timing, particle aging, flicker/
+// shimmer/sway animations all read this instead of simTime directly, so
+// single-tree mode's visuals follow its own clock automatically.
+let currentTimeRef = 0;
+let currentEffSpeed = 1; // same idea as currentTimeRef, but for per-frame delta scaling (e.g. particle physics)
+
+// ---- trees -------------------------------------------------------------------
+let trees = [];
+let maxTrees = 6;
+const SPAWN_RADIUS = NAV_LIMIT * 0.85;
+const MIN_TREE_GAP = 340;      // bigger trees need more room
+let lastTrimTime = 0;
+
+// ---- fly / walk ground movement ---------------------------------------------
+let flyMode = true;
+const GROUND_CLEARANCE = 70;  // walk/fly minimum height above the actual (curved) terrain below the camera — was 26, too small relative to the world's scale and was letting the camera sit close enough to clip into nearby terrain
+let jumpOffset = 0;           // extra height above the walking baseline, from a jump
+let jumpVelocity = 0;         // units/ms, positive = still rising
+const JUMP_SPEED = 0.62;
+const JUMP_GRAVITY = 0.0016;
+let lastSpaceTime = -99999;
+const DOUBLE_TAP_MS = 350;
+
+// ---- full view (aerial) camera ----------------------------------------------
+let orbitMode = false;
+let orbitAngle = 0;
+let aerialRotating = true;
+const AERIAL_RADIUS = NAV_LIMIT * 2.1;    // doubled — further out than before
+const AERIAL_HEIGHT = -2300;              // doubled — full view is a deliberately over-the-top cinematic shot, not bound by the normal fly ceiling
+const AERIAL_TARGET = { x: 0, y: -140, z: 0 }; // aimed lower (near ground), a proper "looking down" angle
+const ORBIT_SPEED = 0.00011; // radians per ms
+let eyePos = { x: 0, y: -240, z: 560 }; // current camera eye, used for fog distance too
+
+// ---- single-tree viewer ------------------------------------------------------
+let singleTreeMode = false;
+let singleTreeSubMode = 'creative'; // 'creative' or 'random'
+let singleTreeArr = [];
+let stRotSpeed = 1;   // 0 = fully stopped
+let stZoom = 1;
+let stAngle = 26;     // degrees of elevation
+let stOrbitAngle = 0;
+const ST_BASE_RADIUS = 260;
+let stAlgoKey = 'lsystem';
+let stStyleKey = 'normal';
+let stBranchiness = 0.6;      // 0..1, real-time-adjustable canopy bias
+let stJitter = 1.0;           // real-time-adjustable jitter multiplier
+let stJitterGradient = 0;     // -1..1, low-rank-to-high-rank jitter ramp (single-tree mode only)
+let stMaxIter = 0;            // max iteration/recursion depth override — 0 = auto (use the style's default)
+
+function getActiveTrees() { return singleTreeMode ? singleTreeArr : trees; }
+
+function setup() {
+  createCanvas(windowWidth, windowHeight, WEBGL);
+
+  angleMode(RADIANS);
+  camPos = createVector(0, -240, 560);
+  camYaw = PI;
+  camPitch = -0.22;
+
+  try {
+    buildFloorGeometry();
+  } catch (e) {
+    console.error('Terrain build failed.', e);
+    reportError('terrain build: ' + e.message);
+  }
+
+  try {
+    buildControls();
+  } catch (e) {
+    console.error('UI controls failed to build.', e);
+    reportError('controls setup: ' + e.message);
+  }
+
+  nextEventTime = random(EVENT_MIN_GAP, EVENT_MAX_GAP);
+
+  try {
+    for (let i = 0; i < 3; i++) spawnTree(true);
+  } catch (e) {
+    console.error('Initial tree spawn failed.', e);
+    reportError('initial spawn: ' + e.message);
+  }
+
+  frameRate(60);
+}
+
+function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+
+// ---------------------------------------------------------------------------
+// UI CONTROLS — buttons, each steppable by keyboard too
+// ---------------------------------------------------------------------------
+function makeButtonGroup(containerId, values, current, formatLabel, onPick) {
+  const row = document.getElementById(containerId);
+  const group = { values, index: Math.max(0, values.indexOf(current)), onPick, btns: [] };
+  group.btns = values.map((v, i) => {
+    const b = document.createElement('button');
+    b.textContent = formatLabel(v);
+    if (i === group.index) b.classList.add('active');
+    b.addEventListener('click', () => group.select(i));
+    row.appendChild(b);
+    return b;
+  });
+  group.select = (idx) => {
+    idx = constrain(idx, 0, group.values.length - 1);
+    group.index = idx;
+    group.btns.forEach(x => x.classList.remove('active'));
+    group.btns[idx].classList.add('active');
+    group.onPick(group.values[idx]);
+  };
+  return group;
+}
+
+let speedGroup, countGroup;
+
+function buildControls() {
+  // tabs
+  const tabGardenBtn = document.getElementById('tabGardenBtn');
+  const tabSingleTreeBtn = document.getElementById('tabSingleTreeBtn');
+  const gardenTab = document.getElementById('gardenTab');
+  const singleTreeTab = document.getElementById('singleTreeTab');
+  tabGardenBtn.addEventListener('click', () => {
+    tabGardenBtn.classList.add('active'); tabSingleTreeBtn.classList.remove('active');
+    gardenTab.style.display = 'block'; singleTreeTab.style.display = 'none';
+    setSingleTreeMode(false);
+  });
+  tabSingleTreeBtn.addEventListener('click', () => {
+    tabSingleTreeBtn.classList.add('active'); tabGardenBtn.classList.remove('active');
+    singleTreeTab.style.display = 'block'; gardenTab.style.display = 'none';
+    setSingleTreeMode(true);
+  });
+
+  // 0x is folded into the speed buttons themselves (first/leftmost) instead
+  // of a separate pause button, to save panel space.
+  speedGroup = makeButtonGroup('speedRow', [0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 6], growthSpeed,
+    v => v + 'x',
+    v => { if (v === 0) { paused = true; } else { paused = false; growthSpeed = v; } });
+
+  countGroup = makeButtonGroup('countRow', [1, 2, 4, 6, 9, 12, 16, 20, 25], maxTrees,
+    v => String(v),
+    v => { maxTrees = v; });
+
+  document.getElementById('hudToggleBtn').addEventListener('click', toggleHud);
+
+  // "generate tree" — button opens a small dropdown to pick algorithm + style
+  const algoSelect = document.getElementById('genAlgoSelect');
+  GENERATION_ALGORITHMS.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.key; opt.textContent = a.label;
+    algoSelect.appendChild(opt);
+  });
+  const styleSelect = document.getElementById('genStyleSelect');
+  STYLE_OPTIONS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.key; opt.textContent = s.label;
+    styleSelect.appendChild(opt);
+  });
+
+  const dropdown = document.getElementById('genTreeDropdown');
+  document.getElementById('genTreeBtn').addEventListener('click', () => {
+    dropdown.style.display = (dropdown.style.display === 'none') ? 'block' : 'none';
+  });
+  document.getElementById('genTreeSpawnBtn').addEventListener('click', () => {
+    spawnCustomTree(algoSelect.value, styleSelect.value);
+  });
+
+  // floor / fog / wind — filled (.active) = on, matching the fly/full-view
+  // buttons' convention; static label text, no more text-swapping.
+  const floorBtn = document.getElementById('floorToggleBtn');
+  floorBtn.classList.toggle('active', floorVisible);
+  floorBtn.addEventListener('click', () => {
+    floorVisible = !floorVisible;
+    floorBtn.classList.toggle('active', floorVisible);
+  });
+
+  const fogBtn = document.getElementById('fogToggleBtn');
+  fogBtn.classList.toggle('active', fogEnabled);
+  fogBtn.addEventListener('click', () => {
+    fogEnabled = !fogEnabled;
+    fogBtn.classList.toggle('active', fogEnabled);
+  });
+
+  const windBtn = document.getElementById('windToggleBtn');
+  windBtn.classList.toggle('active', windEnabled);
+  windBtn.addEventListener('click', () => {
+    windEnabled = !windEnabled;
+    windBtn.classList.toggle('active', windEnabled);
+  });
+
+  // "special trees" — filled (.active) = enabled (default). Disabling forces
+  // every new garden spawn to plain 'normal', and suppresses events (since
+  // they'd have nothing to do while every spawn gets overridden anyway).
+  const specialBtn = document.getElementById('specialTreesBtn');
+  specialBtn.classList.toggle('active', !specialTreesDisabled);
+  specialBtn.addEventListener('click', () => {
+    specialTreesDisabled = !specialTreesDisabled;
+    specialBtn.classList.toggle('active', !specialTreesDisabled);
+  });
+
+  document.getElementById('clearGardenBtn').addEventListener('click', clearGarden);
+
+  // "trigger event" — force-start any of the available periodic events on
+  // demand, overriding whatever the automatic timer was doing.
+  const eventSelect = document.getElementById('eventSelect');
+  SPECIAL_VARIANTS.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.key; opt.textContent = EVENT_LABELS[v.key] || v.key;
+    eventSelect.appendChild(opt);
+  });
+  const eventDropdown = document.getElementById('eventDropdown');
+  document.getElementById('eventTriggerBtn').addEventListener('click', () => {
+    eventDropdown.style.display = (eventDropdown.style.display === 'none') ? 'block' : 'none';
+  });
+  document.getElementById('eventGoBtn').addEventListener('click', () => {
+    triggerEvent(eventSelect.value);
+  });
+
+  document.getElementById('screenshotBtn').addEventListener('click', () => {
+    saveCanvas('fractal-garden', 'png');
+  });
+
+  // fly/walk + full view + rotate/stop
+  document.getElementById('flyWalkBtn').addEventListener('click', () => {
+    flyMode = !flyMode;
+    updateFlyWalkButton();
+  });
+  document.getElementById('fullViewBtn').addEventListener('click', () => {
+    if (!singleTreeMode) orbitMode = !orbitMode;
+    updateFullViewButton();
+  });
+  document.getElementById('rotateStopBtn').addEventListener('click', () => {
+    aerialRotating = !aerialRotating;
+    updateRotateStopButton();
+  });
+  updateFlyWalkButton();
+  updateFullViewButton();
+  updateRotateStopButton();
+
+  const stAlgoSelect = document.getElementById('stAlgoSelect');
+  GENERATION_ALGORITHMS.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.key; opt.textContent = a.label;
+    stAlgoSelect.appendChild(opt);
+  });
+  stAlgoSelect.value = stAlgoKey;
+  // settings only — the tree doesn't rebuild until "regenerate tree" (or R) is pressed
+  stAlgoSelect.addEventListener('change', () => { stAlgoKey = stAlgoSelect.value; });
+
+  const stStyleSelect = document.getElementById('stStyleSelect');
+  STYLE_OPTIONS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.key; opt.textContent = s.label;
+    stStyleSelect.appendChild(opt);
+  });
+  stStyleSelect.value = stStyleKey;
+  stStyleSelect.addEventListener('change', () => { stStyleKey = stStyleSelect.value; });
+
+  const stSubCreativeBtn = document.getElementById('stSubCreativeBtn');
+  const stSubRandomBtn = document.getElementById('stSubRandomBtn');
+  function updateSubModeButtons() {
+    stSubCreativeBtn.classList.toggle('active', singleTreeSubMode === 'creative');
+    stSubRandomBtn.classList.toggle('active', singleTreeSubMode === 'random');
+  }
+  stSubCreativeBtn.addEventListener('click', () => {
+    singleTreeSubMode = 'creative'; updateSubModeButtons();
+  });
+  stSubRandomBtn.addEventListener('click', () => {
+    singleTreeSubMode = 'random'; updateSubModeButtons();
+    if (singleTreeMode) spawnSingleTree(true);
+  });
+  updateSubModeButtons();
+
+  // independent single-tree generation speed — deliberately separate
+  // variables from the garden's speed/pause, per your note.
+  stSpeedGroup = makeButtonGroup('stSpeedRow', [0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 6], stGrowthSpeed,
+    v => v + 'x',
+    v => { if (v === 0) { stPaused = true; } else { stPaused = false; stGrowthSpeed = v; } });
+
+  stBranchGroup = makeButtonGroup('stBranchRow', [0, 0.25, 0.5, 0.75, 1], stBranchiness,
+    v => v.toFixed(2).replace(/\.?0+$/, '') || '0',
+    v => { stBranchiness = v; });
+
+  stJitterGroup = makeButtonGroup('stJitterRow', [0.3, 0.7, 1, 1.5, 2.5], stJitter,
+    v => v + 'x',
+    v => { stJitter = v; });
+
+  stGradientGroup = makeButtonGroup('stGradientRow', [-1, -0.5, 0, 0.5, 1], stJitterGradient,
+    v => (v > 0 ? '+' : '') + v,
+    v => { stJitterGradient = v; });
+
+  stMaxIterGroup = makeButtonGroup('stMaxIterRow', [0, 5, 7, 9, 11, 14, 18, 24], stMaxIter,
+    v => v === 0 ? 'auto' : String(v),
+    v => { stMaxIter = v; });
+
+  stRotGroup = makeButtonGroup('stRotRow', [0, 0.25, 0.5, 1, 2, 3], stRotSpeed,
+    v => v + 'x',
+    v => { stRotSpeed = v; }); // real-time — no regenerate needed
+
+  // zoom / angle — sliders, much wider range so you can pull back far
+  // further than the old button-stepped version allowed. Both apply live.
+  // Zoom: the slider itself stays a normal left-to-right control (so its
+  // track fill renders identically to the angle slider below it — CSS
+  // direction:rtl looked broken because most browsers reverse the thumb but
+  // not the fill). Instead the raw 0.15–16 slider position is reflected
+  // in JS before being used as stZoom, so dragging right still zooms in
+  // (closer) and left zooms out (further), matching the label at a glance.
+  const ZOOM_MIN = 0.15, ZOOM_MAX = 32;
+  const stZoomSlider = document.getElementById('stZoomSlider');
+  const stZoomVal = document.getElementById('stZoomVal');
+  stZoomSlider.value = ZOOM_MIN + ZOOM_MAX - stZoom;
+  stZoomVal.textContent = stZoom.toFixed(2) + 'x';
+  stZoomSlider.addEventListener('input', () => {
+    stZoom = ZOOM_MIN + ZOOM_MAX - parseFloat(stZoomSlider.value);
+    stZoomVal.textContent = stZoom.toFixed(2) + 'x';
+  });
+
+  const stAngleSlider = document.getElementById('stAngleSlider');
+  const stAngleVal = document.getElementById('stAngleVal');
+  stAngleSlider.value = stAngle;
+  stAngleVal.textContent = Math.round(stAngle) + '\u00b0';
+  stAngleSlider.addEventListener('input', () => {
+    stAngle = parseFloat(stAngleSlider.value);
+    stAngleVal.textContent = Math.round(stAngle) + '\u00b0';
+  });
+
+  document.getElementById('stRegenBtn').addEventListener('click', regenerateOrCycle);
+}
+
+// The one and only action that rebuilds the tree — used by the button, the
+// R hotkey, and (in random submode) can also be thought of as "skip ahead".
+function regenerateOrCycle() {
+  if (singleTreeSubMode === 'random') spawnSingleTree(true); else regenerateSingleTree();
+}
+
+let stBranchGroup, stJitterGroup, stGradientGroup, stRotGroup, stSpeedGroup, stMaxIterGroup;
+
+function updateFlyWalkButton() {
+  const btn = document.getElementById('flyWalkBtn');
+  btn.textContent = 'fly';
+  btn.classList.toggle('active', flyMode);
+}
+function updateFullViewButton() {
+  const btn = document.getElementById('fullViewBtn');
+  btn.classList.toggle('active', orbitMode);
+  updateRotateStopVisibility();
+}
+function updateRotateStopButton() {
+  const btn = document.getElementById('rotateStopBtn');
+  btn.textContent = aerialRotating ? 'stop rotation' : 'resume rotation';
+}
+function updateRotateStopVisibility() {
+  document.getElementById('rotateStopRow').style.display = orbitMode ? 'block' : 'none';
+}
+
+let hudVisible = true;
+function toggleHud() {
+  hudVisible = !hudVisible;
+  document.getElementById('hudContent').style.display = hudVisible ? 'block' : 'none';
+  document.getElementById('panel').style.display = hudVisible ? 'block' : 'none';
+  const btn = document.getElementById('hudToggleBtn');
+  btn.textContent = hudVisible ? 'hide guide (H)' : 'show guide (H)';
+  btn.classList.toggle('faded', !hudVisible);
+}
+
+// ---------------------------------------------------------------------------
+// CAMERA
+// ---------------------------------------------------------------------------
+// Click-and-drag look, instead of the Pointer Lock API: pointer lock is
+// unreliable inside sandboxed iframes (which is exactly where this artifact
+// runs) — it can hide the system cursor and then fail to restore it when
+// Escape is pressed. Drag-to-look never hides the cursor, so there's nothing
+// to get stuck.
+function mouseDragged(event) {
+  // Guard against the panel's HTML controls: our own mouse handling below
+  // calls preventDefault() (via `return false`), which was blocking the
+  // browser's native drag on the range sliders — this bailout is what fixes
+  // the sliders not being draggable, since a drag that started on an <input>
+  // (or any other UI element) never reaches this camera-look logic at all.
+  if (event && event.target && event.target.tagName !== 'CANVAS') return true;
+  if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;
+  const sens = 0.0035;
+  camYaw   -= (mouseX - pmouseX) * sens;
+  camPitch -= (mouseY - pmouseY) * sens;
+  const lim = HALF_PI - 0.05;
+  camPitch = constrain(camPitch, -lim, lim);
+  return false; // stop the drag from selecting page text
+}
+
+function keyPressed() {
+  const k = key.toLowerCase();
+  const isNewPress = !keys[k];
+  keys[k] = true;
+  if (k === ' ') {
+    // double-tap toggles fly/walk; a single tap (that isn't part of a
+    // double-tap) jumps, but only when walking and grounded.
+    const now = millis();
+    if (now - lastSpaceTime < DOUBLE_TAP_MS) {
+      if (!singleTreeMode && !orbitMode) { flyMode = !flyMode; updateFlyWalkButton(); }
+      lastSpaceTime = -99999;
+    } else {
+      lastSpaceTime = now;
+      if (!flyMode && !orbitMode && !singleTreeMode && jumpOffset <= 0) jumpVelocity = JUMP_SPEED;
+    }
+    return false;
+  }
+  if (!isNewPress) return; // ignore OS auto-repeat for the toggle/step keys below
+  if (k === 'o' && !singleTreeMode) { orbitMode = !orbitMode; updateFullViewButton(); }
+  if (k === 'h') toggleHud();
+  if (k === 'c') clearGarden();
+  if (k === 'r' && singleTreeMode) regenerateOrCycle();
+  if (k === 'arrowup')    { speedGroup.select(speedGroup.index + 1); return false; }
+  if (k === 'arrowdown')  { speedGroup.select(speedGroup.index - 1); return false; }
+  if (k === 'arrowright') { countGroup.select(countGroup.index + 1); return false; }
+  if (k === 'arrowleft')  { countGroup.select(countGroup.index - 1); return false; }
+}
+function keyReleased() { keys[key.toLowerCase()] = false; }
+
+function getLookDir() {
+  return {
+    x: cos(camPitch) * sin(camYaw),
+    y: -sin(camPitch),        // -y is "up", so positive pitch looks upward
+    z: cos(camPitch) * cos(camYaw)
+  };
+}
+
+function updateCamera() {
+  if (singleTreeMode) {
+    if (stRotSpeed !== 0) stOrbitAngle += deltaTime * 0.0006 * stRotSpeed;
+    // Zoom slider: dragging right = zoom in (closer), left = zoom out
+    // (further). Kept the original direct multiplier formula/range (it had
+    // the correct distance span) and just reverse the slider visually via
+    // CSS instead of inverting the math — inverting the formula without
+    // also re-deriving the min/max bounds is what broke the range last time.
+    const r = ST_BASE_RADIUS * stZoom;
+    const elev = radians(stAngle);
+    const ex = cos(stOrbitAngle) * cos(elev) * r;
+    const ez = sin(stOrbitAngle) * cos(elev) * r;
+    const ey = -sin(elev) * r - 90;
+    eyePos = { x: ex, y: ey, z: ez };
+    camera(eyePos.x, eyePos.y, eyePos.z, 0, -110, 0, WORLD_UP.x, WORLD_UP.y, WORLD_UP.z);
+    return;
+  }
+
+  if (orbitMode) {
+    if (aerialRotating) orbitAngle += deltaTime * ORBIT_SPEED;
+    // "a bit of perspective shift for dramatic effect": a slow breathing
+    // dolly layered on top of the steady rotation, not a static circle.
+    const pulse = 1 + sin(orbitAngle * 0.4) * 0.06;
+    const r = AERIAL_RADIUS * pulse;
+    const h = AERIAL_HEIGHT * pulse;
+    const ex = AERIAL_TARGET.x + cos(orbitAngle) * r;
+    const ez = AERIAL_TARGET.z + sin(orbitAngle) * r;
+    const ey = h + sin(orbitAngle * 0.37) * 45;
+    eyePos = { x: ex, y: ey, z: ez };
+    camera(eyePos.x, eyePos.y, eyePos.z, AERIAL_TARGET.x, AERIAL_TARGET.y, AERIAL_TARGET.z, WORLD_UP.x, WORLD_UP.y, WORLD_UP.z);
+    return;
+  }
+
+  const dir = getLookDir();
+  const rightX = -cos(camYaw), rightZ = sin(camYaw);
+  const speed = (keys['shift'] ? 22 : 11);
+
+  if (flyMode) {
+    if (keys['w']) { camPos.x += dir.x * speed; camPos.y += dir.y * speed; camPos.z += dir.z * speed; }
+    if (keys['s']) { camPos.x -= dir.x * speed; camPos.y -= dir.y * speed; camPos.z -= dir.z * speed; }
+    if (keys['a']) { camPos.x -= rightX * speed; camPos.z -= rightZ * speed; }
+    if (keys['d']) { camPos.x += rightX * speed; camPos.z += rightZ * speed; }
+    if (keys['e']) { camPos.y -= speed; }
+    if (keys['q']) { camPos.y += speed; }
+
+    camPos.x = constrain(camPos.x, -NAV_LIMIT, NAV_LIMIT);
+    camPos.z = constrain(camPos.z, -NAV_LIMIT, NAV_LIMIT);
+    // can't fly below the (curved) terrain directly under the camera, and
+    // can't exceed the ceiling.
+    const groundY = terrainHeight(camPos.x, camPos.z) - GROUND_CLEARANCE;
+    camPos.y = constrain(camPos.y, CAM_MAX_HEIGHT, groundY);
+  } else {
+    // walk: locked to the horizontal plane (pitch doesn't affect movement),
+    // Y auto-follows the ground, no manual vertical control except jumping.
+    const flatLen = Math.hypot(dir.x, dir.z) || 1;
+    const fdx = dir.x / flatLen, fdz = dir.z / flatLen;
+    if (keys['w']) { camPos.x += fdx * speed; camPos.z += fdz * speed; }
+    if (keys['s']) { camPos.x -= fdx * speed; camPos.z -= fdz * speed; }
+    if (keys['a']) { camPos.x -= rightX * speed; camPos.z -= rightZ * speed; }
+    if (keys['d']) { camPos.x += rightX * speed; camPos.z += rightZ * speed; }
+    camPos.x = constrain(camPos.x, -NAV_LIMIT, NAV_LIMIT);
+    camPos.z = constrain(camPos.z, -NAV_LIMIT, NAV_LIMIT);
+
+    jumpOffset += jumpVelocity * deltaTime;
+    jumpVelocity -= JUMP_GRAVITY * deltaTime;
+    if (jumpOffset <= 0) { jumpOffset = 0; jumpVelocity = 0; }
+    const groundY = terrainHeight(camPos.x, camPos.z) - GROUND_CLEARANCE;
+    camPos.y = groundY - jumpOffset;
+  }
+
+  const cx = camPos.x + dir.x * 100;
+  const cy = camPos.y + dir.y * 100;
+  const cz = camPos.z + dir.z * 100;
+  camera(camPos.x, camPos.y, camPos.z, cx, cy, cz, WORLD_UP.x, WORLD_UP.y, WORLD_UP.z);
+  eyePos = { x: camPos.x, y: camPos.y, z: camPos.z };
+}
+
+// ---------------------------------------------------------------------------
+// TERRAIN: height field, baked+lit mesh, procedural grey tile texture
+// ---------------------------------------------------------------------------
+function terrainHeight(x, z) {
+  // returns a small negative-ish offset; -y is "up" so bumps rise gently.
+  // two octaves of noise for more varied, rougher terrain than a single pass.
+  const base = noise(x * TERRAIN_FREQ, z * TERRAIN_FREQ);
+  const detail = noise(x * TERRAIN_FREQ2 + 500, z * TERRAIN_FREQ2 + 500);
+  const h = base * 0.72 + detail * 0.28;
+  return -h * TERRAIN_AMP;
+}
+
+let floorTiles = [];     // {corners:[4 x {x,y,z}], cx, cz} — precomputed once
+let floorEdgeSegs = [];  // {p1:{x,y,z}, p2:{x,y,z}, mx, mz} — precomputed once
+const TILE_EDGE_OFFSET = -1.4; // nudge lines slightly "up" (toward camera) to avoid z-fighting
+const FLOOR_FOG_BANDS = 8; // banded fog for the floor (see drawFloor) — cheap, no shader needed
+
+function buildFloorGeometry() {
+  const half = FLOOR_SIZE / 2;
+  const step = FLOOR_SIZE / FLOOR_DIV;
+  noiseSeed(2024);
+
+  floorTiles = [];
+  for (let j = 0; j < FLOOR_DIV; j++) {
+    for (let i = 0; i < FLOOR_DIV; i++) {
+      const x0 = -half + i * step,     x1 = -half + (i + 1) * step;
+      const z0 = -half + j * step,     z1 = -half + (j + 1) * step;
+      const y00 = terrainHeight(x0, z0), y10 = terrainHeight(x1, z0);
+      const y01 = terrainHeight(x0, z1), y11 = terrainHeight(x1, z1);
+      floorTiles.push({
+        corners: [{x:x0,y:y00,z:z0}, {x:x1,y:y10,z:z0}, {x:x1,y:y11,z:z1}, {x:x0,y:y01,z:z1}],
+        cx: (x0 + x1) / 2, cz: (z0 + z1) / 2
+      });
+    }
+  }
+
+  // every tile edge, following the exact same heightfield, so the grid
+  // reads clearly even though the surface itself curves smoothly.
+  floorEdgeSegs = [];
+  for (let j = 0; j <= FLOOR_DIV; j++) {
+    for (let i = 0; i < FLOOR_DIV; i++) {
+      const xa = -half + i * step, xb = -half + (i + 1) * step, z = -half + j * step;
+      floorEdgeSegs.push({
+        p1: {x:xa, y:terrainHeight(xa, z) + TILE_EDGE_OFFSET, z},
+        p2: {x:xb, y:terrainHeight(xb, z) + TILE_EDGE_OFFSET, z},
+        mx: (xa + xb) / 2, mz: z
+      });
+    }
+  }
+  for (let i = 0; i <= FLOOR_DIV; i++) {
+    for (let j = 0; j < FLOOR_DIV; j++) {
+      const za = -half + j * step, zb = -half + (j + 1) * step, x = -half + i * step;
+      floorEdgeSegs.push({
+        p1: {x, y:terrainHeight(x, za) + TILE_EDGE_OFFSET, z:za},
+        p2: {x, y:terrainHeight(x, zb) + TILE_EDGE_OFFSET, z:zb},
+        mx: x, mz: (za + zb) / 2
+      });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FLOOR RENDERING — plain, unlit, opaque. Shadows and the directional light
+// were pulled out for now (they were the source of the black-screen bug,
+// and added a lot of fragile machinery for what's currently rendering as a
+// washed-out/transparent-looking floor). This is just a flat solid color
+// plus the tile-edge overlay — the curvature still reads clearly from the
+// edges and from fog/silhouette against the trees.
+// ---------------------------------------------------------------------------
+// Floor faces + tile edges, both faded by distance in a few batched bands
+// (cheap: no shader needed, just a handful of beginShape/endShape calls).
+// Without this, the edge grid stayed fully opaque all the way to the
+// horizon across a world this size — thousands of overlapping thin white
+// lines at distance visually collapse into what reads as a solid white
+// floor, which is what was happening before this fix.
+let floorVisible = true;
+
+let fogEnabled = true;
+let windEnabled = true;
+let specialTreesDisabled = false; // garden mode only — forces every new spawn to 'normal'
+const WIND_MAX_SWAY = 3.2; // world units, at the outermost branch tips
+
+function drawFloor() {
+  if (!floorVisible || !floorTiles.length) return;
+  const ex = eyePos.x, ez = eyePos.z;
+
+  const tileBands = Array.from({length: FLOOR_FOG_BANDS}, () => []);
+  for (const t of floorTiles) {
+    const d = dist(t.cx, t.cz, ex, ez);
+    if (fogEnabled && d > FOG_FAR) continue; // fully fogged out — skip drawing entirely
+    const b = floor(constrain(map(d, FOG_NEAR, FOG_FAR, 0, FLOOR_FOG_BANDS - 0.001), 0, FLOOR_FOG_BANDS - 1));
+    tileBands[b].push(t);
+  }
+  push();
+  noLights();
+  noStroke();
+  for (let b = 0; b < FLOOR_FOG_BANDS; b++) {
+    if (!tileBands[b].length) continue;
+    const bandDist = lerp(FOG_NEAR, FOG_FAR, (b + 0.5) / FLOOR_FOG_BANDS);
+    const fog = fogEnabled ? constrain((bandDist - FOG_NEAR) / (FOG_FAR - FOG_NEAR), 0, 1) : 0;
+    const alpha = 28 * (1 - fog); // faces stay mostly see-through even up close
+    if (alpha < 1) continue;
+    fill(FLOOR_BASE_COLOR[0], FLOOR_BASE_COLOR[1], FLOOR_BASE_COLOR[2], alpha);
+    beginShape(TRIANGLES);
+    for (const t of tileBands[b]) {
+      const c = t.corners;
+      vertex(c[0].x, c[0].y, c[0].z); vertex(c[1].x, c[1].y, c[1].z); vertex(c[2].x, c[2].y, c[2].z);
+      vertex(c[0].x, c[0].y, c[0].z); vertex(c[2].x, c[2].y, c[2].z); vertex(c[3].x, c[3].y, c[3].z);
+    }
+    endShape();
+  }
+  pop();
+
+  const edgeBands = Array.from({length: FLOOR_FOG_BANDS}, () => []);
+  for (const e of floorEdgeSegs) {
+    const d = dist(e.mx, e.mz, ex, ez);
+    if (fogEnabled && d > FOG_FAR) continue;
+    const b = floor(constrain(map(d, FOG_NEAR, FOG_FAR, 0, FLOOR_FOG_BANDS - 0.001), 0, FLOOR_FOG_BANDS - 1));
+    edgeBands[b].push(e);
+  }
+  push();
+  noLights();
+  noFill();
+  strokeWeight(1.8);
+  for (let b = 0; b < FLOOR_FOG_BANDS; b++) {
+    if (!edgeBands[b].length) continue;
+    const bandDist = lerp(FOG_NEAR, FOG_FAR, (b + 0.5) / FLOOR_FOG_BANDS);
+    const fog = fogEnabled ? constrain((bandDist - FOG_NEAR) / (FOG_FAR - FOG_NEAR), 0, 1) : 0;
+    const alpha = 255 * (1 - fog); // brighter than the trees' max (235) up close
+    if (alpha < 2) continue;
+    stroke(255, 255, 255, alpha);
+    beginShape(LINES);
+    for (const e of edgeBands[b]) { vertex(e.p1.x, e.p1.y, e.p1.z); vertex(e.p2.x, e.p2.y, e.p2.z); }
+    endShape();
+  }
+  pop();
+}
+
+// ---------------------------------------------------------------------------
+// TREE GENERATION — fully volumetric (3D) turtle / recursive algorithms.
+// Each returns { levels: [[{p1,p2}],...], maxLevel }, local space, trunk
+// base at origin, growth toward -y (up).
+// ---------------------------------------------------------------------------
+
+function rotateAroundAxis(v, axis, ang) {
+  const c = cos(ang), s = sin(ang);
+  const dot = v.x*axis.x + v.y*axis.y + v.z*axis.z;
+  return {
+    x: v.x*c + (axis.y*v.z - axis.z*v.y)*s + axis.x*dot*(1-c),
+    y: v.y*c + (axis.z*v.x - axis.x*v.z)*s + axis.y*dot*(1-c),
+    z: v.z*c + (axis.x*v.y - axis.y*v.x)*s + axis.z*dot*(1-c)
+  };
+}
+function vAdd(a,b){ return {x:a.x+b.x,y:a.y+b.y,z:a.z+b.z}; }
+function vScale(a,s){ return {x:a.x*s,y:a.y*s,z:a.z*s}; }
+function vNorm(a){ const l=Math.hypot(a.x,a.y,a.z)||1; return {x:a.x/l,y:a.y/l,z:a.z/l}; }
+function vCross(a,b){ return {x:a.y*b.z-a.z*b.y, y:a.z*b.x-a.x*b.z, z:a.x*b.y-a.y*b.x}; }
+function stablePerp(dir) {
+  const ref = Math.abs(dir.y) < 0.9 ? {x:0,y:1,z:0} : {x:1,y:0,z:0};
+  return vNorm(vCross(dir, ref));
+}
+
+// ---------------------------------------------------------------------------
+// GNARLY BRANCH GEOMETRY — jitter was meant to make an individual branch a
+// wandering, gnarled line instead of a perfectly straight rod, not just
+// change the angle between branch points. Each segment is now a short
+// polyline (not just p1->p2): a couple of interior points get a small
+// perpendicular offset that tapers to zero at both ends, so branches still
+// connect smoothly to their neighbors but bulge/wander along their own
+// length. p1/p2 are kept as aliases for the first/last point, so any code
+// that only needs the endpoints (tips, rotation, etc.) still works untouched.
+function wavyPoints(p1, p2, jit) {
+  if (!jit || jit < 0.12) return [p1, p2]; // negligible jitter — skip the extra cost entirely
+  const dx = p2.x - p1.x, dy = p2.y - p1.y, dz = p2.z - p1.z;
+  const len = Math.hypot(dx, dy, dz);
+  if (len < 0.0001) return [p1, p2];
+  const dir = { x: dx / len, y: dy / len, z: dz / len };
+  const perp1 = stablePerp(dir);
+  const perp2 = vNorm(vCross(dir, perp1));
+  const nSub = 3;
+  const pts = [p1];
+  for (let i = 1; i < nSub; i++) {
+    const f = i / nSub;
+    const bx = lerp(p1.x, p2.x, f), by = lerp(p1.y, p2.y, f), bz = lerp(p1.z, p2.z, f);
+    const wobble = len * 0.07 * jit * sin(f * PI); // tapers to 0 at both ends
+    const a = random(-1, 1), b = random(-1, 1);
+    pts.push({
+      x: bx + perp1.x * a * wobble + perp2.x * b * wobble,
+      y: by + perp1.y * a * wobble + perp2.y * b * wobble,
+      z: bz + perp1.z * a * wobble + perp2.z * b * wobble
+    });
+  }
+  pts.push(p2);
+  return pts;
+}
+function makeSeg(p1, p2, jit) {
+  const points = wavyPoints(p1, p2, jit);
+  return { p1: points[0], p2: points[points.length - 1], points, t: random() };
+}
+// Draws a (possibly partially-grown) polyline in one call, with an optional
+// rigid sway offset applied to every point — used for both branch growth
+// and the wind-sway animation, so both can share this one code path.
+function drawPolyline(pts, p, swayX, swayZ) {
+  const n = pts.length - 1;
+  if (n <= 0 || p <= 0) return;
+  const exact = constrain(p, 0, 1) * n;
+  const full = Math.floor(exact);
+  const rem = exact - full;
+  for (let k = 0; k < full; k++) {
+    vertex(pts[k].x + swayX, pts[k].y, pts[k].z + swayZ);
+    vertex(pts[k + 1].x + swayX, pts[k + 1].y, pts[k + 1].z + swayZ);
+  }
+  if (full < n) {
+    const a = pts[full], b = pts[full + 1];
+    const ex = lerp(a.x, b.x, rem), ey = lerp(a.y, b.y, rem), ez = lerp(a.z, b.z, rem);
+    vertex(a.x + swayX, a.y, a.z + swayZ);
+    vertex(ex + swayX, ey, ez + swayZ);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// BRANCH-RANK BIAS — shared across every algorithm below.
+// "Rank" is the topological branch generation number (0 = trunk, 1 = first
+// fork, 2 = second, ...), not a per-segment path counter, so it means the
+// same thing for every algorithm.
+//  - Each tree gets its own bias strength: most trees roll high (strongly
+//    prefer extra children), a minority roll low, for natural variety.
+//  - rankChildChance() is strongest at low rank (near the trunk) and fades
+//    out with rank, so lower branches are the ones most likely to keep
+//    splitting further.
+//  - terminalBurst() is what actually produces "several canopy pieces"
+//    scattered through the tree rather than one uniform dome: when a branch
+//    would normally just stop, it has a bias-weighted chance to instead end
+//    in a small cluster of short twigs — a little bushy canopy of its own.
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// SEASONS — a slow garden-wide swing between a "thin season" (most new trees
+// low-branchiness, with a few scattered branchy outliers) and a "branchy
+// season" (most trees bushy, with a few thin outliers). Individual trees
+// always keep some independent randomness — the season just shifts the odds.
+// ---------------------------------------------------------------------------
+let seasonPhase = 0; // radians, advances with simTime
+const SEASON_SPEED = 0.0000045; // a full thin<->branchy cycle takes several minutes at 1x speed
+function currentSeasonLevel() { return (sin(seasonPhase) + 1) / 2; } // 0 = thin season, 1 = branchy season
+
+function pickCanopyBias() {
+  const season = currentSeasonLevel();
+  const highChance = lerp(0.18, 0.88, season); // outliers remain possible in either season
+  return random() < highChance ? random(0.6, 1.0) : random(0.08, 0.3);
+}
+function pickJitterBase() {
+  return random(0.7, 1.4); // "varying degree of jitter intensity" per tree, flat across its own ranks
+}
+function makeJitterFn(baseJitter, gradient, refMaxDepth) {
+  // gradient 0 = flat/consistent jitter at every rank (normal trees always
+  // use this). Non-zero (single-tree mode only) ramps jitter from low rank
+  // to high rank, up or down depending on sign.
+  if (!gradient || !refMaxDepth) return () => baseJitter;
+  return (rank) => {
+    const t = constrain(rank / refMaxDepth, 0, 1);
+    return baseJitter * (1 + gradient * t);
+  };
+}
+function rankChildChance(rank, bias) {
+  return constrain(bias / (1 + rank * 0.3), 0, 0.95);
+}
+function terminalBurst(pushFn, pos, dir, len, order, maxDepth, bias, jit) {
+  if (random() > bias * 0.8) return;
+  const n = floor(random(3, 6));
+  for (let b = 0; b < n; b++) {
+    const twist = random(TWO_PI);
+    const spreadAxis = vNorm(rotateAroundAxis(stablePerp(dir), dir, twist));
+    const ang = radians(random(20, 55));
+    const bd = vNorm(rotateAroundAxis(dir, spreadAxis, ang));
+    const blen = len * random(0.22, 0.42);
+    const bend = vAdd(pos, vScale(bd, blen));
+    pushFn(Math.min(order, maxDepth), makeSeg(pos, bend, jit || 0));
+  }
+}
+
+// --- Algorithm 1: recursive binary branching, aimed at a classic round --
+// canopy silhouette: straight trunk, then consistent wide-angle splits.
+function genLSystem3D(maxDepth, segLimit, bias, jitterFn) {
+  if (bias === undefined) bias = 0.5;
+  if (!jitterFn) jitterFn = () => 1;
+  const levels = [];
+  let maxOrderUsed = 0;
+  let count = 0;
+  function pushSeg(lvl, seg) {
+    if (!levels[lvl]) levels[lvl] = [];
+    levels[lvl].push(seg);
+    if (lvl > maxOrderUsed) maxOrderUsed = lvl;
+  }
+
+  // --- straight trunk: short, so the canopy dominates ---
+  const trunkSegs = floor(random(2, 3));
+  let pos = {x:0,y:0,z:0};
+  let dir = {x:0,y:-1,z:0};
+  let len = random(34, 44);
+  for (let i = 0; i < trunkSegs; i++) {
+    const axis = stablePerp(dir);
+    const trunkJit = jitterFn(i);
+    dir = vNorm(rotateAroundAxis(dir, axis, radians(random(-4, 4) * trunkJit))); // slight noise, still reads as straight
+    const end = vAdd(pos, vScale(dir, len));
+    pushSeg(i, makeSeg(pos, end, trunkJit));
+    pos = end; count++;
+  }
+
+  // --- canopy: recursive, (mostly) binary, wide-angle splits ---
+  const angleBase = random(30, 40);
+  const decay = random(0.78, 0.87); // increased reach — taller trees, without touching the (short) trunk
+
+  function branch(pos, dir, len, order) {
+    if (count > segLimit) return;
+    if (order > maxDepth) { terminalBurst(pushSeg, pos, dir, len, order, maxDepth, bias, jitterFn(order)); return; }
+    const axis1 = stablePerp(dir);
+    const twist = random(TWO_PI); // random azimuth so the split plane varies tree to tree, branch to branch
+    const spreadBias = order * random(1.2, 2.4);
+    // lower-rank branches are the ones most likely to get a 3rd child —
+    // this (plus terminalBurst) is what produces several distinct bushy
+    // canopy clusters instead of one uniform dome.
+    const nChildren = (random() < rankChildChance(order, bias)) ? 3 : 2;
+    const jit = jitterFn(order);
+    for (let i = 0; i < nChildren; i++) {
+      // apical dominance: the first child at each fork stays close to
+      // vertical (a "leader") instead of splaying out wide like its
+      // siblings — that's what gives the tree overall height even with a
+      // short trunk and a wide canopy angle on everything else.
+      const isLeader = i === 0;
+      const spreadAxis = vNorm(rotateAroundAxis(axis1, dir, twist + i * (TWO_PI / nChildren) + random(-0.3, 0.3)));
+      const baseAngle = isLeader ? random(6, 15) : (angleBase + spreadBias);
+      const ang = radians(baseAngle + random(-12, 12) * jit);
+      let nd = rotateAroundAxis(dir, spreadAxis, ang);
+      nd = vNorm(rotateAroundAxis(nd, dir, radians(random(-22, 22) * jit))); // roll for volume
+      const nlen = len * decay * random(0.9, 1.18) * (isLeader ? 1.08 : 1); // leader reaches a bit further too
+      const end = vAdd(pos, vScale(nd, nlen));
+      const lvl = Math.min(order, maxDepth);
+      pushSeg(lvl, makeSeg(pos, end, jit));
+      count++;
+      branch(end, nd, nlen, order + 1);
+    }
+  }
+  branch(pos, dir, len * decay, trunkSegs);
+
+  return { levels, maxLevel: maxOrderUsed };
+}
+
+// --- Algorithm 2: gnarled random-walk branching (already volumetric) -------
+function genRandomWalk(maxDepth, segLimit, bias, jitterFn) {
+  if (bias === undefined) bias = 0.5;
+  if (!jitterFn) jitterFn = () => 1;
+  const levels = []; for (let i=0;i<=maxDepth;i++) levels.push([]);
+  let count = 0;
+  function walk(pos, dir, len, depth) {
+    if (depth > maxDepth || count > segLimit) return;
+    const jit = jitterFn(depth);
+    const a1 = stablePerp(dir);
+    dir = vNorm(rotateAroundAxis(dir, a1, radians(random(-16,16) * jit)));
+    const a2 = stablePerp(dir);
+    dir = vNorm(rotateAroundAxis(dir, a2, radians(random(-16,16) * jit)));
+    // roll around own axis so successive splits don't stay coplanar
+    dir = vNorm(rotateAroundAxis(dir, dir, radians(random(0,360))));
+    const end = vAdd(pos, vScale(dir, len));
+    levels[depth].push(makeSeg(pos, end, jit));
+    count++;
+    if (depth === maxDepth) { terminalBurst((lvl,seg)=>levels[Math.min(lvl,maxDepth)].push(seg), end, dir, len, depth+1, maxDepth, bias, jit); return; }
+    const splitChance = constrain(rankChildChance(depth, bias) + 0.2, 0, 1);
+    let nSplits = 1;
+    if (random() < splitChance) nSplits = (random() < 0.35 + bias * 0.3) ? 3 : 2;
+    for (let i = 0; i < nSplits; i++) {
+      const a3 = stablePerp(dir);
+      const spread = radians(random(12, 32)) * (i % 2 === 0 ? 1 : -1.3) * random(0.8,1.2);
+      const twist = radians(random(0,360)) + i * (TWO_PI / nSplits);
+      let nd = rotateAroundAxis(dir, a3, spread);
+      nd = rotateAroundAxis(nd, dir, twist);
+      walk(end, vNorm(nd), len * random(0.72, 0.85), depth + 1);
+    }
+  }
+  walk({x:0,y:0,z:0}, {x:0,y:-1,z:0}, random(62,82), 0);
+  return { levels, maxLevel: maxDepth };
+}
+
+// --- Algorithm 3: phyllotaxis / golden-angle spiral branching --------------
+function genPhyllotaxis(maxDepth, segLimit, bias, jitterFn) {
+  if (bias === undefined) bias = 0.5;
+  if (!jitterFn) jitterFn = () => 1;
+  const levels = []; for (let i=0;i<=maxDepth;i++) levels.push([]);
+  const GOLDEN = 2.399963;
+  let count = 0;
+  function spiral(pos, dir, len, depth, ringIndex) {
+    if (depth > maxDepth || count > segLimit) return;
+    const jit = jitterFn(depth);
+    const end = vAdd(pos, vScale(dir, len));
+    levels[depth].push(makeSeg(pos, end, jit));
+    count++;
+    if (depth === maxDepth) { terminalBurst((lvl,seg)=>levels[Math.min(lvl,maxDepth)].push(seg), end, dir, len, depth+1, maxDepth, bias, jit); return; }
+    const axis = stablePerp(dir);
+    const contDir = vNorm(rotateAroundAxis(dir, axis, radians(random(4,11) * jit)));
+    spiral(end, contDir, len*0.9, depth+1, ringIndex+1);
+    if (depth > 0 && depth < maxDepth - 1 && random() < constrain(rankChildChance(depth, bias) + 0.3, 0, 0.97)) {
+      const spreadAxis = stablePerp(dir);
+      let side = rotateAroundAxis(dir, spreadAxis, radians(random(42,72)));
+      side = rotateAroundAxis(side, dir, ringIndex * GOLDEN * 2.0);
+      spiral(end, vNorm(side), len * random(0.55,0.7), depth + 2, ringIndex+1);
+    }
+  }
+  spiral({x:0,y:0,z:0}, {x:0,y:-1,z:0}, random(58,76), 0, 0);
+  return { levels, maxLevel: maxDepth };
+}
+
+// --- Algorithm 4: Space Colonization Algorithm (SCA) -----------------------
+// Based on Runions/Lane/Prusinkiewicz (2007): grow toward a cloud of
+// "attraction points" scattered inside a target crown envelope instead of
+// following fixed turn-angle rules. Each point pulls the nearest growing
+// tip toward it; points get consumed once a tip is close enough. This is
+// fundamentally different from the other generators here (all rule/angle
+// driven) — the RESULT shape comes from the envelope you scatter points
+// into, not from hand-picked angles, so it naturally avoids self-
+// intersection and fills space the way a real crown does.
+function genSpaceColonization(maxDepth, segLimit, bias, jitterFn) {
+  if (bias === undefined) bias = 0.5;
+  if (!jitterFn) jitterFn = () => 1;
+
+  // random crown envelope (an ellipsoid) — independent width/height per
+  // tree gives real silhouette variety (tall & narrow vs. wide & flat) for
+  // free, which is the actual advantage of this approach over angle rules.
+  const trunkHeight = random(35, 55);
+  const crownRadius = random(60, 130);
+  const crownHeight = random(80, 190);
+  const crownCenterY = -(trunkHeight + crownHeight * 0.5);
+
+  const nPoints = floor(lerp(55, 150, bias)); // denser cloud = bushier result — ties bias in naturally
+  const points = [];
+  for (let i = 0; i < nPoints; i++) {
+    let x, y, z;
+    do { x = random(-1, 1); y = random(-1, 1); z = random(-1, 1); } while (x*x + y*y + z*z > 1);
+    points.push({ pos: { x: x * crownRadius, y: crownCenterY + y * crownHeight * 0.5, z: z * crownRadius }, alive: true });
+  }
+
+  const D = random(9, 14);               // growth step length
+  const influenceRadius = D * random(4, 6);
+  const killRadius = D * random(1.2, 1.8);
+
+  const levels = [];
+  let maxOrderUsed = 0;
+  let count = 0;
+  function pushSeg(lvl, seg) {
+    if (!levels[lvl]) levels[lvl] = [];
+    levels[lvl].push(seg);
+    if (lvl > maxOrderUsed) maxOrderUsed = lvl;
+    count++;
+  }
+
+  // straight trunk up to the base of the crown envelope
+  let pos = {x:0,y:0,z:0};
+  let dir = {x:0,y:-1,z:0};
+  const trunkSegs = max(1, floor(trunkHeight / D));
+  let order = 0;
+  const nodes = [];
+  for (let i = 0; i < trunkSegs; i++) {
+    const jit = jitterFn(order);
+    dir = vNorm(rotateAroundAxis(dir, stablePerp(dir), radians(random(-3, 3) * jit)));
+    const end = vAdd(pos, vScale(dir, D));
+    pushSeg(order, makeSeg(pos, end, jit));
+    nodes.push({ pos: end, dir, order });
+    pos = end; order++;
+  }
+
+  // Seeking phase: a randomly-sized/positioned envelope can leave the
+  // trunk tip short of ever coming within influence range of any point,
+  // which stalls growth after just the trunk (verified this happening in
+  // testing). Keep extending toward the point cloud's centroid until the
+  // tip is actually within reach, so every tree reliably grows a crown.
+  let cx = 0, cy = 0, cz = 0;
+  for (const p of points) { cx += p.pos.x; cy += p.pos.y; cz += p.pos.z; }
+  cx /= points.length; cy /= points.length; cz /= points.length;
+  let seekGuard = 0;
+  while (seekGuard++ < 40 && count < segLimit) {
+    let within = false;
+    for (const p of points) {
+      if (dist(pos.x, pos.y, pos.z, p.pos.x, p.pos.y, p.pos.z) < influenceRadius) { within = true; break; }
+    }
+    if (within) break;
+    const toCentroid = vNorm({ x: cx - pos.x, y: cy - pos.y, z: cz - pos.z });
+    dir = vNorm(vAdd(vScale(dir, 0.4), vScale(toCentroid, 0.6)));
+    const jit = jitterFn(order);
+    dir = vNorm(rotateAroundAxis(dir, stablePerp(dir), radians(random(-3, 3) * jit)));
+    const end = vAdd(pos, vScale(dir, D));
+    pushSeg(order, makeSeg(pos, end, jit));
+    nodes.push({ pos: end, dir, order });
+    pos = end; order++;
+  }
+
+  // growth loop — "max iteration count" (single-tree mode) maps onto this
+  // via maxDepth, same as the recursion-depth-based generators.
+  const maxIter = maxDepth * 2 + 25;
+  let iter = 0;
+  while (iter++ < maxIter && count < segLimit) {
+    const nodeAccum = new Map();
+    let anyAssoc = false;
+    for (const p of points) {
+      if (!p.alive) continue;
+      let bestIdx = -1, bestDist = influenceRadius;
+      for (let ni = 0; ni < nodes.length; ni++) {
+        const n = nodes[ni];
+        const d = dist(n.pos.x, n.pos.y, n.pos.z, p.pos.x, p.pos.y, p.pos.z);
+        if (d < bestDist) { bestDist = d; bestIdx = ni; }
+      }
+      if (bestIdx >= 0) {
+        anyAssoc = true;
+        if (!nodeAccum.has(bestIdx)) nodeAccum.set(bestIdx, {x:0,y:0,z:0});
+        const acc = nodeAccum.get(bestIdx);
+        const n = nodes[bestIdx];
+        const dl = dist(n.pos.x, n.pos.y, n.pos.z, p.pos.x, p.pos.y, p.pos.z) || 1;
+        acc.x += (p.pos.x - n.pos.x) / dl;
+        acc.y += (p.pos.y - n.pos.y) / dl;
+        acc.z += (p.pos.z - n.pos.z) / dl;
+      }
+    }
+    if (!anyAssoc) break; // nothing left within reach — done growing
+
+    const newNodes = [];
+    for (const [ni, acc] of nodeAccum.entries()) {
+      if (count >= segLimit) break;
+      const n = nodes[ni];
+      let gd = vNorm(acc); // falls back to a zero-length vector only if acc summed to exactly zero
+      gd = vNorm(vAdd(vScale(n.dir, 0.35), vScale(gd, 0.65))); // blend with previous direction for smoother growth
+      const jit = jitterFn(n.order + 1);
+      gd = vNorm(rotateAroundAxis(gd, stablePerp(gd), radians(random(-8, 8) * jit)));
+      const end = vAdd(n.pos, vScale(gd, D));
+      const newOrder = n.order + 1;
+      pushSeg(Math.min(newOrder, maxDepth + 6), makeSeg(n.pos, end, jit));
+      newNodes.push({ pos: end, dir: gd, order: newOrder });
+    }
+    nodes.push(...newNodes);
+
+    for (const p of points) {
+      if (!p.alive) continue;
+      for (const n of newNodes) {
+        if (dist(n.pos.x, n.pos.y, n.pos.z, p.pos.x, p.pos.y, p.pos.z) < killRadius) { p.alive = false; break; }
+      }
+    }
+  }
+
+  return { levels, maxLevel: maxOrderUsed };
+}
+
+// symmetric binary algorithm removed by request — only asymmetric / organic
+// generators remain.
+const ALGORITHMS = [genLSystem3D, genRandomWalk, genPhyllotaxis, genSpaceColonization];
+
+// --- Special: jagged/erratic branching, used only by the rare "lightning" --
+// tree variant. Sharp wide-angle turns, occasional back-and-forth kinks,
+// fewer forks than the organic algorithms — reads as a bolt, not a plant.
+function genLightningJagged(maxDepth, segLimit, bias, jitterFn) {
+  if (bias === undefined) bias = 0.5;
+  if (!jitterFn) jitterFn = () => 1;
+  const levels = []; for (let i=0;i<=maxDepth;i++) levels.push([]);
+  let count = 0;
+  function jag(pos, dir, len, depth) {
+    if (depth > maxDepth || count > segLimit) return;
+    // randomPerp always derives its axis from a fixed world reference, so
+    // without randomizing its azimuth around dir first, every bend lands on
+    // the same axis every step — which is exactly what was trapping this
+    // whole tree in one flat plane (the previous "twist" line rotated dir
+    // around itself, which is a no-op — it never actually did anything).
+    let axis = stablePerp(dir);
+    axis = vNorm(rotateAroundAxis(axis, dir, radians(random(0, 360))));
+    const jit = jitterFn(depth);
+    dir = vNorm(rotateAroundAxis(dir, axis, radians(random(-55, 55) * jit)));
+    const end = vAdd(pos, vScale(dir, len));
+    // lightning keeps only a light touch of waviness (0.3x) — its identity
+    // is already sharp/jagged from the structural kink angles, so a full
+    // gnarly wobble on top would muddy the crisp bolt look.
+    levels[depth].push(makeSeg(pos, end, jit * 0.3));
+    count++;
+    if (depth === maxDepth) { terminalBurst((lvl,seg)=>levels[Math.min(lvl,maxDepth)].push(seg), end, dir, len, depth+1, maxDepth, bias*0.6, jit*0.3); return; }
+    const nForks = random() < constrain(0.3 + rankChildChance(depth, bias) * 0.25, 0, 0.9) ? 2 : 1; // sparser branching than the organic trees
+    for (let i = 0; i < nForks; i++) {
+      let a2 = stablePerp(dir);
+      a2 = vNorm(rotateAroundAxis(a2, dir, radians(random(0, 360)))); // same fix for forks
+      const kink = radians(random(25, 65)) * (i === 0 ? 1 : -1);
+      const nd = vNorm(rotateAroundAxis(dir, a2, kink));
+      jag(end, nd, len * random(0.68, 0.88), depth + 1);
+    }
+  }
+  jag({x:0,y:0,z:0}, {x:0,y:-1,z:0}, random(55,80), 0);
+  return { levels, maxLevel: maxDepth };
+}
+
+// --- Special: forks the whole trunk into two near-independent structures --
+// from the base, used only by the rare "split" variant. Reuses two of the
+// normal organic algorithms and rotates each half away from vertical.
+function rotateLevelsInPlace(levels, axis, angle) {
+  for (const segs of levels) for (const s of segs) {
+    if (s.points) {
+      s.points = s.points.map(pt => rotateAroundAxis(pt, axis, angle));
+      s.p1 = s.points[0];
+      s.p2 = s.points[s.points.length - 1];
+    } else {
+      s.p1 = rotateAroundAxis(s.p1, axis, angle);
+      s.p2 = rotateAroundAxis(s.p2, axis, angle);
+    }
+  }
+}
+function genSplitTree(maxDepth, segLimit, bias, jitterFn) {
+  if (bias === undefined) bias = 0.5;
+  const subDepth = max(4, maxDepth - 2);
+  const subSeg = Math.floor(segLimit / 2);
+  const algoA = random(ALGORITHMS), algoB = random(ALGORITHMS);
+  const a = algoA(subDepth, subSeg, bias, jitterFn);
+  const b = algoB(subDepth, subSeg, bias, jitterFn);
+
+  const tiltAxis = { x: 0, y: 0, z: 1 };
+  const tiltAngle = radians(random(20, 32));
+  rotateLevelsInPlace(a.levels, tiltAxis, tiltAngle);
+  rotateLevelsInPlace(b.levels, tiltAxis, -tiltAngle);
+  const twistA = radians(random(0, 360));
+  const twistB = twistA + PI + radians(random(-40, 40));
+  rotateLevelsInPlace(a.levels, { x: 0, y: 1, z: 0 }, twistA);
+  rotateLevelsInPlace(b.levels, { x: 0, y: 1, z: 0 }, twistB);
+
+
+  const maxLevel = Math.max(a.maxLevel, b.maxLevel);
+  const levels = [];
+  for (let i = 0; i <= maxLevel; i++) levels.push([...(a.levels[i] || []), ...(b.levels[i] || [])]);
+  return { levels, maxLevel };
+}
+
+// ---------------------------------------------------------------------------
+// TREE VARIANTS — rare/special trees. Each special variant has a 1/40 chance
+// per spawn; everything else (the remainder) spawns as a normal white tree.
+// ---------------------------------------------------------------------------
+const SPECIAL_VARIANTS = [
+  { key: 'blue',      color: [95, 150, 255] },
+  { key: 'lightning', color: [220, 232, 255] },
+  { key: 'fall',      color: PARTICLE_VARIANTS.fall.treeColor },
+  { key: 'blood',     color: PARTICLE_VARIANTS.blood.treeColor },
+  { key: 'magic',     color: PARTICLE_VARIANTS.magic.treeColor },
+  { key: 'gold',      color: [255, 200, 90] },
+  { key: 'elder',     color: [247, 240, 224] },
+  { key: 'bloomer',   color: null },  // branches stay normal-toned; only the blooms are pink
+  { key: 'split',     color: null }   // branches stay normal-toned; shape is what's rare
+];
+const SPECIAL_WEIGHT = 1 / 50; // lowered now that there are more special types
+const NORMAL_WEIGHT = 1 - SPECIAL_VARIANTS.length * SPECIAL_WEIGHT;
+
+function pickVariant() {
+  const r = random();
+  let acc = NORMAL_WEIGHT;
+  if (r < acc) return { key: 'normal', color: null };
+  for (const v of SPECIAL_VARIANTS) {
+    acc += SPECIAL_WEIGHT;
+    if (r < acc) return v;
+  }
+  return { key: 'normal', color: null }; // floating-point safety net
+}
+
+// ---------------------------------------------------------------------------
+// PERIODIC EVENTS — for a stretch of time, every newly-spawned tree is
+// forced to one special variant (still picking freely among all the
+// generation algorithms — the event only overrides color/effects, not
+// shape). Existing trees are untouched; the garden gradually "turns"
+// as old trees die off and are replaced by the event type.
+// ---------------------------------------------------------------------------
+const EVENT_MIN_GAP = 55 * 1000, EVENT_MAX_GAP = 110 * 1000;   // time between events
+const EVENT_MIN_DUR = 18 * 1000, EVENT_MAX_DUR = 32 * 1000;    // event length
+// initialized to a real value inside setup() — NOT here. p5's global-mode
+// functions (random, cos, etc.) aren't guaranteed to exist yet at this point
+// in raw top-level script evaluation, and calling one here throws, which
+// silently aborts the rest of this script's top-level init (leaving anything
+// declared below permanently stuck uninitialized — that was the actual bug).
+let nextEventTime = 0;
+let activeEvent = null; // { variant, endTime }
+
+function updateEvents() {
+  if (specialTreesDisabled) {
+    if (activeEvent) { activeEvent = null; updateEventBanner(); }
+    return; // no point running events if every spawn is forced normal anyway
+  }
+  if (activeEvent) {
+    if (simTime >= activeEvent.endTime) {
+      activeEvent = null;
+      nextEventTime = simTime + random(EVENT_MIN_GAP, EVENT_MAX_GAP);
+      updateEventBanner();
+    }
+  } else if (simTime >= nextEventTime) {
+    const variant = random(SPECIAL_VARIANTS);
+    activeEvent = { variant, endTime: simTime + random(EVENT_MIN_DUR, EVENT_MAX_DUR) };
+    updateEventBanner();
+  }
+}
+
+// Manual override from the "trigger event" UI — starts (or replaces) the
+// active event immediately, regardless of the automatic timer, and resets
+// that timer so an automatic event doesn't immediately follow it.
+function triggerEvent(variantKey) {
+  const variant = SPECIAL_VARIANTS.find(v => v.key === variantKey) || SPECIAL_VARIANTS[0];
+  activeEvent = { variant, endTime: simTime + random(EVENT_MIN_DUR, EVENT_MAX_DUR) };
+  nextEventTime = activeEvent.endTime + random(EVENT_MIN_GAP, EVENT_MAX_GAP);
+  updateEventBanner();
+}
+
+const EVENT_LABELS = {
+  blue: 'BLUE BLOOM', lightning: 'ELECTRICAL STORM', fall: 'AUTUMN FALL',
+  blood: 'BLOOD MOON', magic: 'ARCANE SURGE',
+  gold: 'GOLDEN HOUR', elder: 'AGE OF ELDERS', bloomer: 'FLOWERING', split: 'THE SPLITTING'
+};
+function updateEventBanner() {
+  const el = document.getElementById('eventBanner');
+  if (activeEvent) {
+    el.textContent = '✦ ' + EVENT_LABELS[activeEvent.variant.key] + ' ✦';
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TREE OBJECT
+// ---------------------------------------------------------------------------
+function farEnoughFromOtherTrees(x, z) {
+  for (const t of trees) {
+    if (Math.hypot(t.baseX - x, t.baseZ - z) < MIN_TREE_GAP) return false;
+  }
+  return true;
+}
+
+// Named list of the actual generation algorithms, for the manual "generate
+// tree" picker. genLightningJagged/genSplitTree are otherwise only reached
+// automatically via their matching variant — here they're selectable on
+// their own, decoupled from style, so e.g. a Phyllotaxis Blood tree or a
+// Split Gold tree are both valid manual combinations.
+const GENERATION_ALGORITHMS = [
+  { key: 'lsystem',     label: 'L-System',           gen: genLSystem3D },
+  { key: 'randomwalk',  label: 'Random Walk',        gen: genRandomWalk },
+  { key: 'phyllotaxis', label: 'Phyllotaxis',        gen: genPhyllotaxis },
+  { key: 'spacecolony', label: 'Space Colonization', gen: genSpaceColonization },
+  { key: 'jagged',      label: 'Jagged (Lightning)', gen: genLightningJagged },
+  { key: 'split',       label: 'Split (Dual Trunk)', gen: genSplitTree }
+];
+const STYLE_OPTIONS = [{ key: 'normal', label: 'Normal', color: null }].concat(
+  // 'split' is excluded here deliberately: it has no independent visual
+  // effect of its own (no color, no special tuning) — its only purpose is
+  // forcing the dual-trunk algorithm, which the "Split (Dual Trunk)" entry
+  // in GENERATION_ALGORITHMS already covers directly. Listing it as a style
+  // too would make "Split style + any other algorithm" a no-op identical to
+  // "Normal style" in the manual tool. It's still in SPECIAL_VARIANTS, so
+  // automatic spawning and periodic events are unaffected.
+  SPECIAL_VARIANTS.filter(v => v.key !== 'split')
+    .map(v => ({ key: v.key, label: v.key[0].toUpperCase() + v.key.slice(1), color: v.color }))
+);
+
+// Per-style depth/scale/lifespan tuning — shared by automatic and manual
+// spawning so a style always behaves consistently regardless of how a tree
+// came to exist.
+function getVariantTuning(styleKey) {
+  let maxDepth = floor(random(8, 12));
+  let scale = random(3.2, 5.5);
+  let segLimit = 340;
+  let growDur = random(6, 10) * 1000;
+  let aliveDur = random(25, 45) * 1000;
+  let dieDur = random(3, 5) * 1000;
+
+  if (styleKey === 'lightning') {
+    growDur = random(0.6, 1.2) * 1000;   // near-instant growth
+    aliveDur = random(3, 6) * 1000;      // a brief flash, not a resident
+    dieDur = random(1, 2) * 1000;
+    scale = random(3.0, 5.0);
+  } else if (styleKey === 'elder') {
+    maxDepth = floor(random(13, 16));    // deeper than any normal tree
+    segLimit = 520;
+    scale = random(6.5, 9.5);            // the largest trees in the garden
+    growDur = random(14, 20) * 1000;     // grows slowly, deliberately
+    aliveDur = random(90, 150) * 1000;   // far outlives everything else
+    dieDur = random(6, 9) * 1000;
+  }
+  return { maxDepth, scale, segLimit, growDur, aliveDur, dieDur };
+}
+
+function pickPlacement() {
+  let x, z, tries = 0;
+  do {
+    const a = random(TWO_PI);
+    const r = random(SPAWN_RADIUS * 0.12, SPAWN_RADIUS);
+    x = cos(a) * r; z = sin(a) * r; tries++;
+  } while (!farEnoughFromOtherTrees(x, z) && tries < 20);
+  return { x, z };
+}
+
+// Shared by buildTree and regenerateSingleTree: overrides a tuning's
+// maxDepth (the "max iteration count" control in single-tree mode) and
+// scales segLimit along with it — a much deeper tree needs a bigger segment
+// budget or it just gets cut off early before reaching that depth anyway.
+function applyMaxIterOverride(tuning, override) {
+  if (!override) return tuning;
+  const segLimit = Math.min(3000, Math.max(tuning.segLimit, override * 50));
+  return Object.assign({}, tuning, { maxDepth: override, segLimit });
+}
+
+function buildTree(x, z, algoFn, variant, initial, opts) {
+  opts = opts || {};
+  const targetArr = opts.targetArr || trees;
+  const bias = opts.bias !== undefined ? opts.bias : pickCanopyBias();
+  const jitterBase = opts.jitterBase !== undefined ? opts.jitterBase : pickJitterBase();
+  let tuning = getVariantTuning(variant.key);
+  if (opts.maxIterOverride) tuning = applyMaxIterOverride(tuning, opts.maxIterOverride);
+  const jitterFn = makeJitterFn(jitterBase, opts.jitterGradient || 0, tuning.maxDepth);
+  const gen = (variant.key === 'lightning')
+    ? genLightningJagged(floor(random(7, 10)), 220, bias, jitterFn) // jagged variant keeps its own tighter depth/seg budget
+    : algoFn(tuning.maxDepth, tuning.segLimit, bias, jitterFn);
+
+  const tree = {
+    baseX: x, baseZ: z, baseY: terrainHeight(x, z), scale: tuning.scale,
+    levels: gen.levels, maxLevel: gen.maxLevel,
+    born: simTime - (initial ? random(0, tuning.growDur) : 0),
+    growDur: tuning.growDur, aliveDur: opts.aliveDur !== undefined ? opts.aliveDur : tuning.aliveDur, dieDur: tuning.dieDur,
+    variant: variant.key, color: variant.color,
+    flickerSeed: random(1000),
+    particles: PARTICLE_VARIANTS[variant.key] ? [] : null,
+    lastParticleSpawn: 0
+  };
+  targetArr.push(tree);
+  return tree;
+}
+
+function spawnTree(initial) {
+  const variant = specialTreesDisabled ? { key: 'normal', color: null }
+    : (activeEvent ? activeEvent.variant : pickVariant());
+  const algoFn = variant.key === 'lightning' ? genLightningJagged
+    : variant.key === 'split' ? genSplitTree
+    : ALGORITHMS[floor(random(ALGORITHMS.length))];
+  const { x, z } = pickPlacement();
+  buildTree(x, z, algoFn, variant, initial);
+}
+
+// Manual spawn from the "generate tree" UI — algorithm and style picked
+// independently by the user.
+function spawnCustomTree(algoKey, styleKey) {
+  const algoEntry = GENERATION_ALGORITHMS.find(a => a.key === algoKey) || GENERATION_ALGORITHMS[0];
+  const styleEntry = STYLE_OPTIONS.find(s => s.key === styleKey) || STYLE_OPTIONS[0];
+  const { x, z } = pickPlacement();
+  buildTree(x, z, algoEntry.gen, { key: styleEntry.key, color: styleEntry.color }, false);
+}
+
+// ---------------------------------------------------------------------------
+// SINGLE-TREE VIEWER — a dedicated tree-creation mode. 'creative' submode
+// keeps one persistent tree, centered at the origin, that every control
+// (algorithm, style, branchiness, jitter, jitter gradient) updates in place
+// in real time rather than killing and respawning it. 'random' submode
+// instead cycles automatically through fresh random trees as each one
+// completes its natural lifecycle.
+const ST_CREATIVE_ALIVE_DUR = 1000 * 60 * 60; // effectively never dies on its own while editing
+
+function spawnSingleTree(randomized) {
+  singleTreeArr = [];
+  let algoEntry, styleEntry, bias, jitterBase, jitterGradient;
+  if (randomized) {
+    algoEntry = random(GENERATION_ALGORITHMS);
+    styleEntry = random(STYLE_OPTIONS);
+    bias = pickCanopyBias();
+    jitterBase = pickJitterBase();
+    jitterGradient = random([-1, -0.5, 0, 0, 0.5, 1]); // 0 (flat) weighted a bit heavier
+  } else {
+    algoEntry = GENERATION_ALGORITHMS.find(a => a.key === stAlgoKey) || GENERATION_ALGORITHMS[0];
+    styleEntry = STYLE_OPTIONS.find(s => s.key === stStyleKey) || STYLE_OPTIONS[0];
+    bias = stBranchiness;
+    jitterBase = stJitter;
+    jitterGradient = stJitterGradient;
+  }
+  const tree = buildTree(0, 0, algoEntry.gen, { key: styleEntry.key, color: styleEntry.color }, false, {
+    targetArr: singleTreeArr, bias, jitterBase, jitterGradient,
+    maxIterOverride: randomized ? undefined : (stMaxIter || undefined),
+    aliveDur: randomized ? undefined : ST_CREATIVE_ALIVE_DUR
+  });
+  tree.born = stSimTime; // single-tree mode's own independent clock, growing from the ground up
+}
+
+// Regenerates the CURRENT tree's geometry in place using whatever the
+// creative controls are currently set to — same tree object (not a new
+// spawn), but born is reset so it visibly grows from the ground again. This
+// is the ONLY thing that rebuilds the tree; algorithm/style/branchiness/
+// jitter/gradient controls just update settings until this (or the R key)
+// is triggered. If there's no tree yet (mode just turned on), creates one.
+function regenerateSingleTree() {
+  if (singleTreeArr.length === 0) { spawnSingleTree(false); return; }
+  const t = singleTreeArr[0];
+  const algoEntry = GENERATION_ALGORITHMS.find(a => a.key === stAlgoKey) || GENERATION_ALGORITHMS[0];
+  const styleEntry = STYLE_OPTIONS.find(s => s.key === stStyleKey) || STYLE_OPTIONS[0];
+  let tuning = getVariantTuning(styleEntry.key);
+  if (stMaxIter) tuning = applyMaxIterOverride(tuning, stMaxIter);
+  const jitterFn = makeJitterFn(stJitter, stJitterGradient, tuning.maxDepth);
+  const gen = (styleEntry.key === 'lightning')
+    ? genLightningJagged(floor(random(7, 10)), 220, stBranchiness, jitterFn)
+    : algoEntry.gen(tuning.maxDepth, tuning.segLimit, stBranchiness, jitterFn);
+  t.levels = gen.levels; t.maxLevel = gen.maxLevel;
+  t.variant = styleEntry.key; t.color = styleEntry.color;
+  t.scale = tuning.scale;
+  t.growDur = tuning.growDur; t.dieDur = tuning.dieDur;
+  t.aliveDur = ST_CREATIVE_ALIVE_DUR;
+  t.particles = PARTICLE_VARIANTS[styleEntry.key] ? (t.particles || []) : null;
+  t.born = stSimTime; // regenerating always restarts the growth animation from the ground
+}
+
+function setSingleTreeMode(on) {
+  if (singleTreeMode === on) return;
+  singleTreeMode = on;
+  if (singleTreeMode) {
+    orbitMode = false; // camera modes are mutually exclusive
+    updateFullViewButton(); // also refreshes rotate/stop visibility
+    stOrbitAngle = 0;
+    if (singleTreeSubMode === 'random') spawnSingleTree(true); else regenerateSingleTree();
+  } else {
+    singleTreeArr = [];
+  }
+}
+
+function updateSingleTreeMode() {
+  if (singleTreeArr.length === 0) { regenerateSingleTree(); return; }
+  if (singleTreeSubMode === 'random') {
+    const state = computeTreeState(singleTreeArr[0], stSimTime);
+    if (state.dead) spawnSingleTree(true);
+  }
+}
+
+function computeTreeState(t, now) {
+  const age = now - t.born;
+  if (age < t.growDur) return { growthT: age / t.growDur, fadeAlpha: 1, dead: false };
+  if (age < t.growDur + t.aliveDur) return { growthT: 1, fadeAlpha: 1, dead: false };
+  if (age < t.growDur + t.aliveDur + t.dieDur) {
+    return { growthT: 1, fadeAlpha: 1 - (age - t.growDur - t.aliveDur) / t.dieDur, dead: false };
+  }
+  return { growthT: 1, fadeAlpha: 0, dead: true };
+}
+
+function trimAndSpawnTrees() {
+  if (singleTreeMode) return; // garden simulation freezes while in single-tree mode
+  const now = simTime;
+  for (let i = trees.length - 1; i >= 0; i--) {
+    if (computeTreeState(trees[i], now).dead) trees.splice(i, 1);
+  }
+  if (trees.length > maxTrees && now - lastTrimTime > 400) {
+    let oldestIdx = 0, oldestBorn = Infinity;
+    for (let i = 0; i < trees.length; i++) {
+      if (trees[i].born < oldestBorn) { oldestBorn = trees[i].born; oldestIdx = i; }
+    }
+    trees.splice(oldestIdx, 1);
+    lastTrimTime = now;
+  }
+  while (trees.length < maxTrees) spawnTree(false);
+}
+
+// "clear garden" UI action — kills every tree immediately; trimAndSpawnTrees
+// (called every frame already) naturally refills up to maxTrees right after,
+// so this reads as an instant respawn rather than an empty garden.
+function clearGarden() {
+  trees = [];
+}
+
+// Shared geometry pass used both to draw the visible tree and, from the
+// light's camera, to populate the shadow map — same segments, same growth
+// reveal, so the shadow always matches what's actually on screen.
+function drawTreeLines(t, state, lit) {
+  push();
+  noLights();
+  translate(t.baseX, t.baseY, t.baseZ);
+  scale(t.scale);
+  noFill();
+
+  const maxLevel = t.maxLevel;
+  const front = state.growthT * (maxLevel + 1);
+
+  // per-tree fog factor (distance from camera to the tree's base) — line
+  // primitives can't easily get per-vertex fog without a custom stroke
+  // shader, so whole trees fade together, which reads fine at this scale.
+  const distToCam = dist(t.baseX, t.baseY, t.baseZ, eyePos.x, eyePos.y, eyePos.z);
+  const fogFactor = (lit && fogEnabled) ? constrain((distToCam - FOG_NEAR) / (FOG_FAR - FOG_NEAR), 0, 1) : 0;
+  if (lit && fogFactor >= 0.985) { pop(); return; } // fully fogged out, skip drawing
+
+  const baseColor = t.color; // null = plain white/grey, else [r,g,b]
+  const isElder = t.variant === 'elder';
+  const isLightning = t.variant === 'lightning';
+  const isGold = t.variant === 'gold';
+  const thicknessMul = isElder ? 1.7 : 1;
+  const flicker = isLightning ? (0.68 + 0.32 * sin(currentTimeRef * 0.022 + t.flickerSeed)) : 1;
+
+  for (let lvl = 0; lvl <= maxLevel; lvl++) {
+    const segs = t.levels[lvl];
+    if (!segs || segs.length === 0) continue;
+    if (lvl > front) break;
+    const depthFrac = lvl / maxLevel;
+
+    if (lit) {
+      const a = (235 - depthFrac * 60) * state.fadeAlpha * (1 - fogFactor) * flicker;
+      // sqrt taper instead of linear: trunk reads noticeably thick, then
+      // thins out quickly, rather than a uniform thin-wire look throughout.
+      strokeWeight(max(4.2 - Math.sqrt(depthFrac) * 3.6, 0.4) * thicknessMul);
+      if (baseColor) {
+        const cr = baseColor[0] * (1 - depthFrac * 0.3), cg = baseColor[1] * (1 - depthFrac * 0.3), cb = baseColor[2] * (1 - depthFrac * 0.3);
+        stroke(cr, cg, cb, a);
+      } else {
+        const shade = 255 - depthFrac * 70; // subtle depth cue since lines aren't lit
+        stroke(shade, shade, shade, a);
+      }
+    } else {
+      strokeWeight(max(4.6 - Math.sqrt(depthFrac) * 3.8, 0.6) * thicknessMul); // a bit fatter: casts a visible shadow
+      stroke(255);
+    }
+
+    beginShape(LINES);
+    // wind sway: a small rigid per-rank offset (deeper ranks sway more),
+    // animated with time, so branches gently move instead of standing dead
+    // still. Applied uniformly across a rank's segments — cheap, and the
+    // small per-rank granularity still reads as a flowing, organic motion.
+    let swayX = 0, swayZ = 0;
+    if (windEnabled) {
+      const swayAmt = depthFrac * depthFrac * WIND_MAX_SWAY;
+      swayX = sin(currentTimeRef * 0.0011 + t.flickerSeed) * swayAmt;
+      swayZ = cos(currentTimeRef * 0.0009 + t.flickerSeed * 1.7) * swayAmt;
+    }
+    for (const s of segs) {
+      // per-segment growth stagger: siblings at the same rank don't all
+      // start/finish growing in lockstep — each has its own small random
+      // start offset within the rank's time window (s.t, set at generation
+      // time), but every segment still finishes by the time the NEXT rank
+      // begins, so a child's parent tip is always fully grown by the time
+      // the child appears.
+      const start = lvl + (s.t || 0) * 0.6;
+      const p = constrain((front - start) / ((lvl + 1) - start), 0, 1);
+      drawPolyline(s.points, p, swayX, swayZ);
+    }
+    endShape();
+  }
+
+  // gold shimmer: one extra soft additive pass, slowly pulsing
+  if (lit && isGold && fogFactor < 0.98) {
+    const pulse = 0.55 + 0.45 * sin(currentTimeRef * 0.0016 + t.flickerSeed);
+    push();
+    blendMode(ADD);
+    noFill();
+    for (let lvl = 0; lvl <= maxLevel; lvl++) {
+      const segs = t.levels[lvl];
+      if (!segs || segs.length === 0 || lvl > front) continue;
+      const partial = constrain(front - lvl, 0, 1);
+      const depthFrac = lvl / maxLevel;
+      strokeWeight((5 - depthFrac * 3.2) * thicknessMul);
+      stroke(255, 205, 110, 55 * pulse * state.fadeAlpha * (1 - fogFactor));
+      let swayX = 0, swayZ = 0;
+      if (windEnabled) {
+        const swayAmt = depthFrac * depthFrac * WIND_MAX_SWAY;
+        swayX = sin(currentTimeRef * 0.0011 + t.flickerSeed) * swayAmt;
+        swayZ = cos(currentTimeRef * 0.0009 + t.flickerSeed * 1.7) * swayAmt;
+      }
+      beginShape(LINES);
+      for (const s of segs) drawPolyline(s.points, partial, swayX, swayZ);
+      endShape();
+    }
+    pop();
+  }
+
+  // bloomer: once fully grown, small pulsing pink points at the branch tips
+  if (lit && t.variant === 'bloomer' && state.growthT >= 1 && fogFactor < 0.98) {
+    const tips = t.levels[maxLevel];
+    if (tips && tips.length) {
+      const pulse = 0.6 + 0.4 * sin(currentTimeRef * 0.003 + t.flickerSeed);
+      strokeWeight(7 * pulse);
+      stroke(255, 140, 190, 210 * state.fadeAlpha * (1 - fogFactor));
+      beginShape(POINTS);
+      for (const s of tips) vertex(s.p2.x, s.p2.y, s.p2.z);
+      endShape();
+    }
+  }
+
+  pop();
+}
+
+function updateFallParticles(t, state) {
+  if (!PARTICLE_VARIANTS[t.variant] || !t.particles) return;
+  const dt = min(deltaTime, 100) * currentEffSpeed;
+
+  if (state.growthT >= 1 && state.fadeAlpha > 0.4 && t.particles.length < 70 && random() < 0.1) {
+    const tips = t.levels[t.maxLevel];
+    if (tips && tips.length) {
+      const s = random(tips);
+      t.particles.push({
+        pos: {
+          x: t.baseX + t.scale * s.p2.x,
+          y: t.baseY + t.scale * s.p2.y,
+          z: t.baseZ + t.scale * s.p2.z
+        },
+        vel: { x: random(-0.03, 0.03), y: random(-0.02, 0), z: random(-0.03, 0.03) },
+        born: currentTimeRef,
+        life: random(2500, 4500)
+      });
+    }
+  }
+
+  for (let i = t.particles.length - 1; i >= 0; i--) {
+    const p = t.particles[i];
+    p.vel.y += FALL_GRAVITY * dt;
+    p.pos.x += p.vel.x * dt;
+    p.pos.y += p.vel.y * dt;
+    p.pos.z += p.vel.z * dt;
+    if (currentTimeRef - p.born > p.life || (p.pos.y - t.baseY) > 500) t.particles.splice(i, 1);
+  }
+}
+
+function drawFallParticles(t, state) {
+  const pv = PARTICLE_VARIANTS[t.variant];
+  if (!pv || !t.particles || t.particles.length === 0) return;
+  const distToCam = dist(t.baseX, t.baseY, t.baseZ, eyePos.x, eyePos.y, eyePos.z);
+  const fogFactor = fogEnabled ? constrain((distToCam - FOG_NEAR) / (FOG_FAR - FOG_NEAR), 0, 1) : 0;
+  if (fogFactor >= 0.98) return;
+
+  push();
+  noLights();
+  blendMode(BLEND);
+  strokeWeight(3); // smaller than before (was 5) — reads as flecks, not blobs
+  for (const p of t.particles) {
+    const ageFrac = (currentTimeRef - p.born) / p.life;
+    let alpha = 255;
+    if (ageFrac < 0.15) alpha = map(ageFrac, 0, 0.15, 0, 255);
+    else if (ageFrac > 0.7) alpha = map(ageFrac, 0.7, 1, 255, 0);
+    alpha *= (1 - fogFactor) * state.fadeAlpha;
+    stroke(pv.particleColor[0], pv.particleColor[1], pv.particleColor[2], alpha);
+    point(p.pos.x, p.pos.y, p.pos.z);
+  }
+  pop();
+}
+
+function drawTreesVisible(activeList, states) {
+  blendMode(BLEND);
+  for (let i = 0; i < activeList.length; i++) drawTreeLines(activeList[i], states[i], true);
+  for (let i = 0; i < activeList.length; i++) drawFallParticles(activeList[i], states[i]);
+  if (!singleTreeMode) {
+    document.getElementById('treecount').innerHTML = '<b>' + activeList.length + '</b> trees growing';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// MAIN LOOP
+// ---------------------------------------------------------------------------
+function draw() {
+  try {
+    const dt = min(deltaTime, 100);
+    const effSpeed = paused ? 0 : growthSpeed;
+    simTime += dt * effSpeed;
+    seasonPhase += dt * effSpeed * SEASON_SPEED;
+
+    const stEffSpeed = stPaused ? 0 : stGrowthSpeed;
+    stSimTime += dt * stEffSpeed;
+
+    currentTimeRef = singleTreeMode ? stSimTime : simTime;
+    currentEffSpeed = singleTreeMode ? stEffSpeed : effSpeed;
+
+    background(0);
+    updateCamera();
+
+    if (singleTreeMode) {
+      updateSingleTreeMode();
+    } else {
+      updateEvents();
+      trimAndSpawnTrees();
+    }
+
+    const activeList = getActiveTrees();
+    const states = activeList.map(t => computeTreeState(t, currentTimeRef));
+    for (let i = 0; i < activeList.length; i++) updateFallParticles(activeList[i], states[i]);
+
+    drawFloor();
+    drawTreesVisible(activeList, states);
+  } catch (e) {
+    // last-resort net: without this, an uncaught error here would silently
+    // stop p5's draw loop forever, which looks exactly like "the screen
+    // went black and nothing renders again" — even background(0) above
+    // wouldn't run on the next frame.
+    console.error('draw() failed:', e);
+    reportError('draw(): ' + e.message);
+  }
+}
+
+</script>
+</body>
+</html>
