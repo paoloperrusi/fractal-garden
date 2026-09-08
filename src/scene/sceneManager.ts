@@ -41,7 +41,7 @@ export class SceneManager {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
 
     // Controls
@@ -50,8 +50,26 @@ export class SceneManager {
     this.controls.dampingFactor = 0.05;
     this.controls.maxPolarAngle = Math.PI / 2 + 0.05; // Don't flip below ground
     this.controls.minDistance = 2;
-    this.controls.maxDistance = 150;
+    this.controls.maxDistance = 250;
     this.controls.target.set(0, 6, 0);
+
+    // Free Middle Mouse Button from dollying so it can be used for centering
+    this.controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: null as any,
+      RIGHT: THREE.MOUSE.PAN,
+    };
+
+    // Middle mouse button click: center view on tree and scale zoom to view whole tree
+    const onMiddleClick = (ev: MouseEvent) => {
+      if (ev.button === 1) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.frameTree();
+      }
+    };
+    this.renderer.domElement.addEventListener('pointerdown', onMiddleClick);
+    this.renderer.domElement.addEventListener('auxclick', onMiddleClick);
 
     // Tree Group
     this.treeGroup = new THREE.Group();
@@ -169,13 +187,54 @@ export class SceneManager {
   }
 
   /**
-   * Smoothly frame the camera to fit tree height
+   * Center view on tree and scale zoom to fit the entire tree comfortably
    */
-  public frameTree(treeHeight: number): void {
-    const targetY = Math.max(2, treeHeight * 0.45);
-    this.controls.target.set(0, targetY, 0);
-    const dist = Math.max(12, treeHeight * 1.8);
-    this.camera.position.set(dist * 0.7, targetY + dist * 0.35, dist * 0.9);
+  public frameTree(treeHeight?: number): void {
+    const box = new THREE.Box3();
+
+    // Compute bounding box encompassing branches and foliage
+    if (this.treeGroup.children.length > 0) {
+      box.setFromObject(this.treeGroup);
+    }
+
+    if (box.isEmpty() || !isFinite(box.min.x)) {
+      const h = typeof treeHeight === 'number' && treeHeight > 0 ? treeHeight : 15;
+      box.min.set(-h * 0.35, 0, -h * 0.35);
+      box.max.set(h * 0.35, h, h * 0.35);
+    }
+
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    center.x = 0;
+    center.z = 0;
+    center.y = Math.max(1.0, center.y);
+
+    const size = new THREE.Vector3();
+    box.getSize(size);
+
+    // Compute distance required to frame both height and width based on camera FOV & aspect
+    const fovRad = THREE.MathUtils.degToRad(this.camera.fov);
+    const aspect = this.camera.aspect || (window.innerWidth / window.innerHeight);
+
+    const distVertical = (size.y * 0.5) / Math.tan(fovRad * 0.5);
+    const maxHorizSize = Math.max(size.x, size.z);
+    const distHorizontal = (maxHorizSize * 0.5) / (Math.tan(fovRad * 0.5) * aspect);
+
+    // Target distance with comfortable 25% framing margin
+    const targetDist = Math.max(8, Math.max(distVertical, distHorizontal) * 1.25);
+
+    // Retain current view direction (azimuth/elevation) if reasonable, otherwise set default angle
+    const offset = this.camera.position.clone().sub(this.controls.target);
+    if (offset.lengthSq() < 0.1 || Math.abs(offset.y / offset.length()) > 0.95) {
+      offset.set(0.7, 0.45, 0.85);
+    }
+    offset.normalize().multiplyScalar(targetDist);
+
+    this.controls.target.copy(center);
+    this.camera.position.copy(center).add(offset);
+    this.camera.near = Math.max(0.1, targetDist * 0.01);
+    this.camera.far = Math.max(500, targetDist * 15);
+    this.camera.updateProjectionMatrix();
     this.controls.update();
   }
 

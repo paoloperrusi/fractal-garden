@@ -7,9 +7,12 @@ export default defineConfig({
     target: 'esnext',
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      input: 'index.dev.html',
+    },
   },
   server: {
     port: 3000,
-    open: true,
+    open: '/index.dev.html',
   },
 });

@@ -8,7 +8,7 @@ interface SegmentData {
   rStart: number;
   rEnd: number;
   depth: number;
-  progressFrac: number; // 0 at base of tree, 1 at outermost tip
+  progressFrac: number;
   direction: THREE.Vector3;
 }
 
@@ -20,8 +20,72 @@ interface LeafData {
   color: THREE.Color;
 }
 
+interface LeafTemplate {
+  offset: THREE.Vector3;
+  direction: THREE.Vector3;
+  fullScale: number;
+  color: THREE.Color;
+}
+
+interface TreeNode {
+  depth: number;
+  direction: THREE.Vector3;
+  fullLength: number;
+  fullRadius: number;
+  taper: number;
+  twist: number;
+  segmentCount: number;
+  wanderOffsets: THREE.Vector3[];
+  growthStart: number;
+  growthEnd: number;
+  leaves: LeafTemplate[];
+  children: TreeNode[];
+}
+
 export class TreeGenerator {
   private prng: PRNG = new PRNG();
+  private cachedSkeleton: TreeNode | null = null;
+  private cachedSkeletonKey: string = '';
+
+  private getSkeletonKey(params: TreeParameters): string {
+    return [
+      params.seed,
+      params.maxDepth,
+      params.branchCount,
+      params.branchProbability,
+      params.startBranchDepth,
+      params.symmetry,
+      params.trunkLength,
+      params.lengthDecay,
+      params.lengthVariance,
+      params.trunkRadius,
+      params.radiusDecay,
+      params.taper,
+      params.minRadius,
+      params.radialSegments,
+      params.branchAngle,
+      params.branchAngleVariance,
+      params.azimuthSpread,
+      params.azimuthVariance,
+      params.pitchVariance,
+      params.gravitropism,
+      params.segmentsPerBranch,
+      params.gnarliness,
+      params.twist,
+      params.leavesEnabled,
+      params.leafStartDepth,
+      params.leavesPerTip,
+      params.leafClusterRadius,
+      params.leafSize,
+      params.leafSizeVariance,
+      params.leafShape,
+      params.leafColor,
+      params.leafColorTip,
+      params.leafColorVariation,
+      params.leafGravity,
+      params.leafDensity,
+    ].join('|');
+  }
 
   /**
    * Generates the entire 3D tree (branch mesh + leaf instanced mesh)
@@ -31,30 +95,19 @@ export class TreeGenerator {
     leafMesh: THREE.InstancedMesh | null;
     stats: TreeStats;
   } {
-    this.prng.setSeed(params.seed);
+    // 1. Maintain deterministic skeleton decoupled from growthProgress
+    const skeletonKey = this.getSkeletonKey(params);
+    if (!this.cachedSkeleton || this.cachedSkeletonKey !== skeletonKey) {
+      this.cachedSkeletonKey = skeletonKey;
+      this.cachedSkeleton = this.buildSkeleton(params);
+    }
 
+    // 2. Evaluate segments & leaves continuously for current growthProgress
     const segments: SegmentData[] = [];
     const leaves: LeafData[] = [];
 
-    // Calculate maximum structural depth adjusted by growthProgress
-    const effectiveDepth = Math.max(1, Math.min(params.maxDepth, Math.ceil(params.maxDepth * params.growthProgress * 1.2)));
-
-    // Generate branch hierarchy recursively
-    const rootPos = new THREE.Vector3(0, 0, 0);
-    const rootDir = new THREE.Vector3(0, 1, 0);
-
-    this.growBranch(
-      rootPos,
-      rootDir,
-      params.trunkLength,
-      params.trunkRadius,
-      0,
-      0.0,
-      effectiveDepth,
-      params,
-      segments,
-      leaves
-    );
+    const clampedGrowth = THREE.MathUtils.clamp(params.growthProgress, 0.0, 1.0);
+    this.evaluateGrowth(this.cachedSkeleton, new THREE.Vector3(0, 0, 0), clampedGrowth, params, segments, leaves);
 
     // Build branch mesh
     const { branchGeometry, branchMaterial } = this.buildBranchGeometry(segments, params);
@@ -95,220 +148,225 @@ export class TreeGenerator {
     return { branchMesh, leafMesh, stats };
   }
 
-  private growBranch(
+  /**
+   * Deterministically builds the full tree skeleton independent of growthProgress
+   */
+  private buildSkeleton(params: TreeParameters): TreeNode {
+    this.prng.setSeed(params.seed);
+    const totalStages = Math.max(1, params.maxDepth + 1);
+
+    const buildNode = (
+      length: number,
+      radius: number,
+      dir: THREE.Vector3,
+      depth: number
+    ): TreeNode => {
+      const actualLength = length * (1.0 - params.lengthVariance * (1.0 - params.symmetry) * (this.prng.next() * 2 - 1));
+      const actualRadius = Math.max(params.minRadius, radius);
+      const segmentCount = Math.max(1, Math.min(6, params.segmentsPerBranch));
+
+      const wanderOffsets: THREE.Vector3[] = [];
+      for (let s = 0; s < segmentCount; s++) {
+        if (params.gnarliness > 0 && params.symmetry < 1.0) {
+          const organicFactor = (1.0 - params.symmetry) * params.gnarliness * 0.25;
+          wanderOffsets.push(new THREE.Vector3(
+            this.prng.spread(0, organicFactor),
+            this.prng.spread(0, organicFactor * 0.5),
+            this.prng.spread(0, organicFactor)
+          ));
+        } else {
+          wanderOffsets.push(new THREE.Vector3(0, 0, 0));
+        }
+      }
+
+      // Precompute leaves
+      const leaves: LeafTemplate[] = [];
+      const isTerminal = depth >= params.maxDepth - 1;
+      if (params.leavesEnabled && depth >= params.leafStartDepth) {
+        if (this.prng.next() <= params.leafDensity) {
+          const count = isTerminal ? params.leavesPerTip : Math.max(1, Math.floor(params.leavesPerTip * 0.4));
+          const baseColor = new THREE.Color(params.leafColor);
+          const tipColor = new THREE.Color(params.leafColorTip);
+
+          for (let i = 0; i < count; i++) {
+            const r = params.leafClusterRadius * Math.cbrt(this.prng.next());
+            const theta = this.prng.next() * Math.PI * 2;
+            const phi = Math.acos(this.prng.range(-1, 1));
+            const offset = new THREE.Vector3(
+              r * Math.sin(phi) * Math.cos(theta),
+              r * Math.sin(phi) * Math.sin(theta),
+              r * Math.cos(phi)
+            );
+            const leafDir = offset.clone().normalize();
+            if (leafDir.lengthSq() < 0.001) leafDir.copy(dir);
+            leafDir.addScaledVector(new THREE.Vector3(0, params.leafGravity, 0), 0.6).normalize();
+
+            const sizeVar = (1.0 - params.leafSizeVariance * 0.5) + this.prng.next() * params.leafSizeVariance;
+            const scale = Math.max(0.02, params.leafSize * sizeVar);
+
+            const mixFrac = THREE.MathUtils.clamp((depth / params.maxDepth) + this.prng.spread(0, params.leafColorVariation * 0.5), 0, 1);
+            const leafColor = baseColor.clone().lerp(tipColor, mixFrac);
+            if (params.leafColorVariation > 0) {
+              const hsl = { h: 0, s: 0, l: 0 };
+              leafColor.getHSL(hsl);
+              hsl.h += this.prng.spread(0, params.leafColorVariation * 0.08);
+              hsl.l += this.prng.spread(0, params.leafColorVariation * 0.12);
+              leafColor.setHSL(hsl.h, THREE.MathUtils.clamp(hsl.s, 0, 1), THREE.MathUtils.clamp(hsl.l, 0, 1));
+            }
+            leaves.push({ offset, direction: leafDir, fullScale: scale, color: leafColor });
+          }
+        }
+      }
+
+      // Growth timeline window for this depth stage
+      const growthStart = depth / (totalStages + 0.15);
+      const growthEnd = (depth + 1.0) / (totalStages + 0.15);
+
+      // Precompute children
+      const children: TreeNode[] = [];
+      if (depth < params.maxDepth) {
+        if (depth < params.startBranchDepth) {
+          const childLength = length * params.lengthDecay;
+          const childRadius = actualRadius * (1.0 - params.taper) * params.radiusDecay;
+          children.push(buildNode(childLength, childRadius, dir.clone(), depth + 1));
+        } else {
+          const branchCount = Math.max(1, params.branchCount);
+          const angleRad = THREE.MathUtils.degToRad(params.branchAngle);
+          const angleVarRad = THREE.MathUtils.degToRad(params.branchAngleVariance * (1.0 - params.symmetry));
+          const azimuthStep = THREE.MathUtils.degToRad(params.azimuthSpread);
+          const azimuthVarRad = THREE.MathUtils.degToRad(params.azimuthVariance * (1.0 - params.symmetry));
+
+          const refUp = Math.abs(dir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+          const perpAxis = new THREE.Vector3().crossVectors(dir, refUp).normalize();
+
+          for (let b = 0; b < branchCount; b++) {
+            if (depth > 0 && this.prng.next() > params.branchProbability) continue;
+
+            const childDir = dir.clone();
+            const branchPitch = angleRad + this.prng.spread(0, angleVarRad);
+            const pitchAxis = perpAxis.clone().applyAxisAngle(dir, b * (Math.PI * 2 / branchCount));
+            childDir.applyAxisAngle(pitchAxis, branchPitch);
+
+            const baseAzimuth = b * azimuthStep;
+            const azimuthJitter = this.prng.spread(0, azimuthVarRad);
+            childDir.applyAxisAngle(dir, baseAzimuth + azimuthJitter);
+            childDir.normalize();
+
+            const childLength = length * params.lengthDecay;
+            const childRadius = actualRadius * (1.0 - params.taper) * params.radiusDecay;
+            children.push(buildNode(childLength, childRadius, childDir, depth + 1));
+          }
+        }
+      }
+
+      return {
+        depth,
+        direction: dir.clone().normalize(),
+        fullLength: actualLength,
+        fullRadius: actualRadius,
+        taper: params.taper,
+        twist: params.twist,
+        segmentCount,
+        wanderOffsets,
+        growthStart,
+        growthEnd,
+        leaves,
+        children,
+      };
+    };
+
+    return buildNode(params.trunkLength, params.trunkRadius, new THREE.Vector3(0, 1, 0), 0);
+  }
+
+  /**
+   * Evaluates branch segments and foliage smoothly along the growth timeline
+   */
+  private evaluateGrowth(
+    node: TreeNode,
     startPos: THREE.Vector3,
-    direction: THREE.Vector3,
-    length: number,
-    radius: number,
-    depth: number,
-    progress: number,
-    maxAllowedDepth: number,
+    growthProgress: number,
     params: TreeParameters,
     segments: SegmentData[],
     leaves: LeafData[]
   ): void {
-    if (depth > maxAllowedDepth) return;
+    if (growthProgress <= node.growthStart) return;
 
-    // Apply growth progress to scale length and radius dynamically
-    const depthGrowthThreshold = depth / params.maxDepth;
-    if (params.growthProgress < depthGrowthThreshold) return;
+    const easeT = growthProgress >= node.growthEnd
+      ? 1.0
+      : THREE.MathUtils.smoothstep((growthProgress - node.growthStart) / (node.growthEnd - node.growthStart), 0, 1);
 
-    const localGrowth = THREE.MathUtils.clamp(
-      (params.growthProgress - depthGrowthThreshold) / (1.0 / params.maxDepth),
-      0.0,
-      1.0
-    );
+    const branchLen = node.fullLength * easeT;
+    if (branchLen <= 0.001) return;
 
-    const actualLength = length * (1.0 - params.lengthVariance * (1.0 - params.symmetry) * (this.prng.next() * 2 - 1)) * localGrowth;
-    const actualRadius = Math.max(params.minRadius, radius * localGrowth);
-    if (actualLength <= 0.05 || actualRadius <= 0.002) return;
+    const branchRadius = node.fullRadius * Math.max(0.15, Math.sqrt(easeT));
+    const stepLen = branchLen / node.segmentCount;
+    const taperFactor = 1.0 - (node.taper / node.segmentCount);
 
-    const segmentCount = Math.max(1, Math.min(6, params.segmentsPerBranch));
-    const stepLength = actualLength / segmentCount;
+    let curPos = startPos.clone();
+    let curDir = node.direction.clone();
+    let curRadius = branchRadius;
 
-    let currentPos = startPos.clone();
-    let currentDir = direction.clone().normalize();
-    let currentRadius = actualRadius;
+    for (let s = 0; s < node.segmentCount; s++) {
+      const nextRadius = Math.max(params.minRadius, curRadius * taperFactor);
 
-    const taperFactor = 1.0 - (params.taper / segmentCount);
-
-    for (let s = 0; s < segmentCount; s++) {
-      const nextRadius = Math.max(params.minRadius, currentRadius * taperFactor);
-
-      // Gravitropism: bend upward (+Y) or downward (-Y)
       if (params.gravitropism !== 0) {
         const gravityDir = new THREE.Vector3(0, params.gravitropism > 0 ? 1 : -1, 0);
-        const gravityStrength = Math.abs(params.gravitropism) * 0.12 * (depth + 1);
-        currentDir.addScaledVector(gravityDir, gravityStrength).normalize();
+        const gravityStrength = Math.abs(params.gravitropism) * 0.12 * (node.depth + 1);
+        curDir.addScaledVector(gravityDir, gravityStrength).normalize();
       }
 
-      // Gnarliness / organic wander
-      if (params.gnarliness > 0 && params.symmetry < 1.0) {
-        const organicFactor = (1.0 - params.symmetry) * params.gnarliness * 0.25;
-        const wander = new THREE.Vector3(
-          this.prng.spread(0, organicFactor),
-          this.prng.spread(0, organicFactor * 0.5),
-          this.prng.spread(0, organicFactor)
-        );
-        currentDir.add(wander).normalize();
+      if (node.wanderOffsets[s] && node.wanderOffsets[s].lengthSq() > 0) {
+        curDir.add(node.wanderOffsets[s]).normalize();
       }
 
-      // Twist rotation around vertical axis
-      if (params.twist !== 0) {
-        const twistRad = THREE.MathUtils.degToRad((params.twist / segmentCount) * (1.0 - depth / params.maxDepth));
-        currentDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), twistRad).normalize();
+      if (node.twist !== 0) {
+        const twistRad = THREE.MathUtils.degToRad((node.twist / node.segmentCount) * (1.0 - node.depth / params.maxDepth));
+        curDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), twistRad).normalize();
       }
 
-      const nextPos = currentPos.clone().addScaledVector(currentDir, stepLength);
-      const segmentProgress = progress + (s / segmentCount) * (1.0 / (params.maxDepth + 1));
+      const nextPos = curPos.clone().addScaledVector(curDir, stepLen);
+      const segmentProgress = (node.depth + (s / node.segmentCount)) / (params.maxDepth + 1);
 
       segments.push({
-        start: currentPos.clone(),
+        start: curPos.clone(),
         end: nextPos.clone(),
-        rStart: currentRadius,
+        rStart: curRadius,
         rEnd: nextRadius,
-        depth,
+        depth: node.depth,
         progressFrac: segmentProgress,
-        direction: currentDir.clone(),
+        direction: curDir.clone(),
       });
 
-      currentPos = nextPos;
-      currentRadius = nextRadius;
+      curPos = nextPos;
+      curRadius = nextRadius;
     }
 
-    // Leaf generation at terminal tips or high depth
-    const isTerminal = depth >= params.maxDepth - 1;
-    if (params.leavesEnabled && depth >= params.leafStartDepth) {
-      if (this.prng.next() <= params.leafDensity) {
-        const leavesToSpawn = isTerminal ? params.leavesPerTip : Math.max(1, Math.floor(params.leavesPerTip * 0.4));
-        this.spawnLeaves(currentPos, currentDir, leavesToSpawn, depth, params, leaves);
+    // Children begin smoothly once this node is mature
+    if (growthProgress >= node.growthEnd) {
+      for (const child of node.children) {
+        this.evaluateGrowth(child, curPos, growthProgress, params, segments, leaves);
       }
     }
 
-    // Branching into child branches
-    if (depth < params.maxDepth) {
-      // Check start branch depth (allows long unbranched trunks like pines or palms)
-      if (depth < params.startBranchDepth) {
-        // Continue single main leader trunk
-        const childLength = length * params.lengthDecay;
-        const childRadius = currentRadius * params.radiusDecay;
-        this.growBranch(
-          currentPos,
-          currentDir,
-          childLength,
-          childRadius,
-          depth + 1,
-          progress + 1.0 / (params.maxDepth + 1),
-          maxAllowedDepth,
-          params,
-          segments,
-          leaves
-        );
-        return;
-      }
-
-      // Split into child branches
-      const branchCount = Math.max(1, params.branchCount);
-      const angleRad = THREE.MathUtils.degToRad(params.branchAngle);
-      const angleVarRad = THREE.MathUtils.degToRad(params.branchAngleVariance * (1.0 - params.symmetry));
-      const azimuthStep = THREE.MathUtils.degToRad(params.azimuthSpread);
-      const azimuthVarRad = THREE.MathUtils.degToRad(params.azimuthVariance * (1.0 - params.symmetry));
-
-      // Find an arbitrary orthogonal vector to currentDir
-      const refUp = Math.abs(currentDir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-      const perpAxis = new THREE.Vector3().crossVectors(currentDir, refUp).normalize();
-
-      for (let b = 0; b < branchCount; b++) {
-        // Probability check
-        if (depth > 0 && this.prng.next() > params.branchProbability) {
-          continue;
+    // Foliage buds and smoothly scales up at branch maturity
+    if (node.leaves.length > 0) {
+      const leafStart = node.growthEnd * 0.85;
+      const leafEnd = Math.min(1.0, node.growthEnd * 1.15);
+      if (growthProgress >= leafStart) {
+        const leafT = THREE.MathUtils.clamp((growthProgress - leafStart) / (leafEnd - leafStart), 0, 1);
+        const leafEase = THREE.MathUtils.smoothstep(leafT, 0, 1);
+        if (leafEase > 0.01) {
+          for (const leaf of node.leaves) {
+            leaves.push({
+              position: curPos.clone().addScaledVector(leaf.offset, leafEase),
+              direction: leaf.direction,
+              scale: leaf.fullScale * leafEase,
+              depth: node.depth,
+              color: leaf.color,
+            });
+          }
         }
-
-        const childDir = currentDir.clone();
-
-        // Branch divergence angle (pitch)
-        const branchPitch = angleRad + this.prng.spread(0, angleVarRad);
-        const pitchAxis = perpAxis.clone().applyAxisAngle(currentDir, b * (Math.PI * 2 / branchCount));
-        childDir.applyAxisAngle(pitchAxis, branchPitch);
-
-        // Azimuthal rotation around parent branch axis
-        const baseAzimuth = b * azimuthStep;
-        const azimuthJitter = this.prng.spread(0, azimuthVarRad);
-        childDir.applyAxisAngle(currentDir, baseAzimuth + azimuthJitter);
-
-        childDir.normalize();
-
-        const childLength = length * params.lengthDecay;
-        const childRadius = currentRadius * params.radiusDecay;
-
-        this.growBranch(
-          currentPos,
-          childDir,
-          childLength,
-          childRadius,
-          depth + 1,
-          progress + 1.0 / (params.maxDepth + 1),
-          maxAllowedDepth,
-          params,
-          segments,
-          leaves
-        );
       }
-    }
-  }
-
-  private spawnLeaves(
-    tipPos: THREE.Vector3,
-    tipDir: THREE.Vector3,
-    count: number,
-    depth: number,
-    params: TreeParameters,
-    leaves: LeafData[]
-  ): void {
-    const baseColor = new THREE.Color(params.leafColor);
-    const tipColor = new THREE.Color(params.leafColorTip);
-
-    for (let i = 0; i < count; i++) {
-      // Scatter in spherical cluster around tip
-      const radius = params.leafClusterRadius * Math.cbrt(this.prng.next());
-      const theta = this.prng.next() * Math.PI * 2;
-      const phi = Math.acos(this.prng.range(-1, 1));
-
-      const offset = new THREE.Vector3(
-        radius * Math.sin(phi) * Math.cos(theta),
-        radius * Math.sin(phi) * Math.sin(theta),
-        radius * Math.cos(phi)
-      );
-
-      const leafPos = tipPos.clone().add(offset);
-
-      // Orientation vector: outward from tip + gravitropism droop
-      const leafDir = offset.clone().normalize();
-      if (leafDir.lengthSq() < 0.001) leafDir.copy(tipDir);
-      leafDir.addScaledVector(new THREE.Vector3(0, params.leafGravity, 0), 0.6).normalize();
-
-      // Size with variance
-      const sizeVar = (1.0 - params.leafSizeVariance * 0.5) + this.prng.next() * params.leafSizeVariance;
-      const scale = Math.max(0.02, params.leafSize * sizeVar * params.growthProgress);
-
-      // Color variation
-      const mixFrac = THREE.MathUtils.clamp((depth / params.maxDepth) + this.prng.spread(0, params.leafColorVariation * 0.5), 0, 1);
-      const leafColor = baseColor.clone().lerp(tipColor, mixFrac);
-      if (params.leafColorVariation > 0) {
-        const hsl = { h: 0, s: 0, l: 0 };
-        leafColor.getHSL(hsl);
-        hsl.h += this.prng.spread(0, params.leafColorVariation * 0.08);
-        hsl.l += this.prng.spread(0, params.leafColorVariation * 0.12);
-        leafColor.setHSL(hsl.h, THREE.MathUtils.clamp(hsl.s, 0, 1), THREE.MathUtils.clamp(hsl.l, 0, 1));
-      }
-
-      leaves.push({
-        position: leafPos,
-        direction: leafDir,
-        scale,
-        depth,
-        color: leafColor,
-      });
     }
   }
 

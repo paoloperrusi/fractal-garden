@@ -1,6 +1,6 @@
 import { Pane } from 'tweakpane';
 import { TreeParameters, TreeStats } from '../types';
-import { PRESETS, DEFAULT_PARAMETERS } from '../generator/presets';
+import { DEFAULT_PARAMETERS } from '../generator/presets';
 
 export class TweakpaneUI {
   public pane: Pane;
@@ -42,28 +42,6 @@ export class TweakpaneUI {
 
     // Quick Action Bar
     const actionFolder = this.pane.addFolder({ title: 'Quick Actions', expanded: true });
-    
-    // Preset Dropdown
-    const presetOptions: Record<string, string> = { '(Custom)': '' };
-    Object.keys(PRESETS).forEach((name) => {
-      presetOptions[name] = name;
-    });
-
-    const presetBinding = actionFolder.addBinding({ preset: '' }, 'preset', {
-      label: 'Preset',
-      options: presetOptions,
-    });
-
-    presetBinding.on('change', (ev) => {
-      const presetName = ev.value;
-      if (presetName && PRESETS[presetName]) {
-        Object.assign(params, PRESETS[presetName]);
-        this.isInternalUpdating = true;
-        this.pane.refresh();
-        this.isInternalUpdating = false;
-        callbacks.onChange();
-      }
-    });
 
     const btnSeed = actionFolder.addButton({ title: '🎲 New Seed' });
     btnSeed.on('click', () => callbacks.onRandomizeSeed());
@@ -71,10 +49,10 @@ export class TweakpaneUI {
     const btnMutate = actionFolder.addButton({ title: '🧬 Mutate (5%)' });
     btnMutate.on('click', () => callbacks.onMutate());
 
-    const btnFocus = actionFolder.addButton({ title: '🎯 Focus Cam' });
+    const btnFocus = actionFolder.addButton({ title: '🎯 Focus Cam (MMB)' });
     btnFocus.on('click', () => callbacks.onFrameCamera());
 
-    const btnReset = actionFolder.addButton({ title: '↺ Reset' });
+    const btnReset = actionFolder.addButton({ title: '↺ Reset to Default' });
     btnReset.on('click', () => callbacks.onReset());
 
 
@@ -194,7 +172,7 @@ export class TweakpaneUI {
     const pageSim = tabs.pages[4];
 
     const fGrowth = pageSim.addFolder({ title: 'Growth Timeline', expanded: true });
-    fGrowth.addBinding(params, 'growthProgress', { label: 'Growth Stage', min: 0.01, max: 1.0, step: 0.01 });
+    fGrowth.addBinding(params, 'growthProgress', { label: 'Growth Stage', min: 0.0, max: 1.0, step: 0.01 });
     fGrowth.addBinding(params, 'growthAnimation', { label: 'Loop Growth Cycle' });
     fGrowth.addBinding(params, 'growthSpeed', { label: 'Cycle Speed', min: 0.05, max: 1.0, step: 0.01 });
 

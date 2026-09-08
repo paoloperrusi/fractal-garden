@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fractal Tree Generator — 3D Botanical Synthesizer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0f1115;
+      color: #e4e7ec;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      user-select: none;
+    }
+
+    #app {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Minimalist Top-Left HUD */
+    #hud {
+      position: fixed;
+      top: 18px;
+      left: 20px;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #ffffff;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    }
+
+    .brand-tag {
+      font-size: 9px;
+      letter-spacing: 1px;
+      padding: 2px 6px;
+      background: rgba(74, 222, 128, 0.15);
+      border: 1px solid rgba(74, 222, 128, 0.35);
+      color: #4ade80;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.45);
+      line-height: 1.5;
+    }
+
+    .hint kbd {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      padding: 1px 5px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 10px;
+    }
+
+    /* Custom styling for Tweakpane panel */
+    .tp-dfwv {
+      top: 14px !important;
+      right: 18px !important;
+      max-height: calc(100vh - 28px);
+      overflow-y: auto !important;
+      width: 320px !important;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6) !important;
+      border-radius: 8px !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    }
+
+    .tp-dfwv::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    .tp-dfwv::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="hud">
+    <div class="brand">
+      <span class="brand-title">Fractal Tree Generator</span>
+      <span class="brand-tag">v2.0 3D</span>
+    </div>
+    <div class="hint">
+      <kbd>LMB</kbd> Orbit &bull; <kbd>MMB</kbd> Center &bull; <kbd>RMB</kbd> Pan &bull; <kbd>Wheel</kbd> Zoom
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

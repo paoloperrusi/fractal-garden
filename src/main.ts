@@ -81,14 +81,12 @@ class App {
     this.lastStats = stats;
 
     if (frameCam) {
-      this.sceneManager.frameTree(stats.height);
+      this.sceneManager.frameTree();
     }
   }
 
   private frameCamera(): void {
-    if (this.lastStats) {
-      this.sceneManager.frameTree(this.lastStats.height);
-    }
+    this.sceneManager.frameTree();
   }
 
   private randomizeSeed(): void {
@@ -159,17 +157,27 @@ class App {
     });
   }
 
+  private growthPhase: number = 1.0;
+
   private animate = (): void => {
     requestAnimationFrame(this.animate);
 
-    // Dynamic Growth Loop
+    // Dynamic Continuous Growth Loop
     if (this.params.growthAnimation) {
-      this.params.growthProgress += 0.003 * this.params.growthSpeed;
-      if (this.params.growthProgress > 1.0) {
-        this.params.growthProgress = 0.05;
+      // 0.0 -> 1.0 is smooth continuous botanical growth
+      // 1.0 -> 1.35 holds full bloom showcase pause
+      this.growthPhase += 0.003 * this.params.growthSpeed;
+      if (this.growthPhase > 1.35) {
+        this.growthPhase = 0.0;
       }
-      this.ui.refresh();
-      this.queueRebuild(false);
+      const targetProgress = Math.min(1.0, Number(this.growthPhase.toFixed(3)));
+      if (this.params.growthProgress !== targetProgress) {
+        this.params.growthProgress = targetProgress;
+        this.ui.refresh();
+        this.queueRebuild(false);
+      }
+    } else {
+      this.growthPhase = this.params.growthProgress;
     }
 
     this.sceneManager.update(this.params);
