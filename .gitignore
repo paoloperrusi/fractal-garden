@@ -1,3 +1,7 @@
+# Dependencies & build
+node_modules/
+dist/
+
 # OS generated files
 .DS_Store
 Thumbs.db
@@ -9,3 +13,4 @@ desktop.ini
 *.swp
 *.swo
 *~
+

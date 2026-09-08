@@ -1,0 +1,26 @@
+{
+  "name": "fractal-tree-generator",
+  "version": "1.0.0",
+  "description": "Procedural 3D Fractal Tree Generator and Botanical Synthesizer with real-time parametric controls and 3D export.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "bugs": {
+    "url": "https://github.com/paoloperrusi/fractal-garden/issues"
+  },
+  "homepage": "https://github.com/paoloperrusi/fractal-garden#readme",
+  "dependencies": {
+    "@types/three": "^0.185.4",
+    "three": "^0.185.1",
+    "tweakpane": "^4.0.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  },
+  "devDependencies": {
+    "@tweakpane/core": "^2.0.5",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
