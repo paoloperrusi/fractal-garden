@@ -4,6 +4,7 @@ import { PRESETS, DEFAULT_PARAMETERS } from '../generator/presets';
 
 export class TweakpaneUI {
   public pane: Pane;
+  private isInternalUpdating: boolean = false;
   private statsDisplay: {
     branches: string;
     vertices: string;
@@ -57,7 +58,9 @@ export class TweakpaneUI {
       const presetName = ev.value;
       if (presetName && PRESETS[presetName]) {
         Object.assign(params, PRESETS[presetName]);
+        this.isInternalUpdating = true;
         this.pane.refresh();
+        this.isInternalUpdating = false;
         callbacks.onChange();
       }
     });
@@ -239,8 +242,11 @@ export class TweakpaneUI {
 
     // Live Change listener for ANY slider or parameter in the entire UI
     this.pane.on('change', (ev: any) => {
+      if (this.isInternalUpdating) return;
       const targetKey = ev.target?.key;
-      if (targetKey === 'preset' || ev.target?.readonly) return;
+      // CRITICAL: Only trigger changes for actual tree/environment parameters!
+      // This prevents telemetry (branches, vertices, leaves, dimensions) or UI internal state from looping.
+      if (!targetKey || targetKey === 'preset' || !(targetKey in params)) return;
       callbacks.onChange(targetKey);
     });
   }
@@ -250,10 +256,15 @@ export class TweakpaneUI {
     this.statsDisplay.vertices = `${stats.vertexCount.toLocaleString()} (${stats.triangleCount.toLocaleString()} tris)`;
     this.statsDisplay.leaves = stats.leafCount.toLocaleString();
     this.statsDisplay.dimensions = `${stats.height}m high × ${stats.maxRadius * 2}m wide`;
+    this.isInternalUpdating = true;
     this.pane.refresh();
+    this.isInternalUpdating = false;
   }
 
   public refresh(): void {
+    this.isInternalUpdating = true;
     this.pane.refresh();
+    this.isInternalUpdating = false;
   }
 }
+

@@ -12,6 +12,8 @@ class App {
   private exportManager: ExportManager;
   private ui: TweakpaneUI;
   private lastStats: any = null;
+  private rebuildQueued: boolean = false;
+  private pendingFrameCam: boolean = false;
 
   constructor() {
     this.params = { ...DEFAULT_PARAMETERS };
@@ -57,7 +59,19 @@ class App {
     }
 
     this.sceneManager.updateEnvironment(this.params);
-    this.rebuildTree(false);
+    this.queueRebuild(false);
+  }
+
+  private queueRebuild(frameCam: boolean = false): void {
+    if (frameCam) this.pendingFrameCam = true;
+    if (this.rebuildQueued) return;
+    this.rebuildQueued = true;
+    requestAnimationFrame(() => {
+      this.rebuildQueued = false;
+      const shouldFrame = this.pendingFrameCam;
+      this.pendingFrameCam = false;
+      this.rebuildTree(shouldFrame);
+    });
   }
 
   private rebuildTree(frameCam: boolean = false): void {
@@ -80,7 +94,7 @@ class App {
   private randomizeSeed(): void {
     this.params.seed = Math.floor(Math.random() * 999999);
     this.ui.refresh();
-    this.rebuildTree(false);
+    this.queueRebuild(false);
   }
 
   /**
@@ -105,14 +119,14 @@ class App {
     }
 
     this.ui.refresh();
-    this.rebuildTree(false);
+    this.queueRebuild(false);
   }
 
   private resetParams(): void {
     Object.assign(this.params, DEFAULT_PARAMETERS);
     this.ui.refresh();
     this.sceneManager.updateEnvironment(this.params);
-    this.rebuildTree(true);
+    this.queueRebuild(true);
   }
 
   private exportGLTF(): void {
@@ -141,7 +155,7 @@ class App {
       Object.assign(this.params, loadedParams);
       this.ui.refresh();
       this.sceneManager.updateEnvironment(this.params);
-      this.rebuildTree(true);
+      this.queueRebuild(true);
     });
   }
 
@@ -155,7 +169,7 @@ class App {
         this.params.growthProgress = 0.05;
       }
       this.ui.refresh();
-      this.rebuildTree(false);
+      this.queueRebuild(false);
     }
 
     this.sceneManager.update(this.params);
