@@ -42,6 +42,8 @@ class App {
 
     // Animation loop
     this.animate();
+
+    (window as any).app = this;
   }
 
   private handleParamChange(key?: string): void {
@@ -86,7 +88,7 @@ class App {
   }
 
   private frameCamera(): void {
-    this.sceneManager.frameTree();
+    this.sceneManager.frameTree(undefined, true);
   }
 
   private randomizeSeed(): void {

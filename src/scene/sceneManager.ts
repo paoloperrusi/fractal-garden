@@ -22,6 +22,15 @@ export class SceneManager {
   private clock: THREE.Clock;
   private windTime: number = 0;
 
+  // Camera framing animation
+  private isFraming: boolean = false;
+  private frameStartCamera: THREE.Vector3 = new THREE.Vector3();
+  private frameEndCamera: THREE.Vector3 = new THREE.Vector3();
+  private frameStartTarget: THREE.Vector3 = new THREE.Vector3();
+  private frameEndTarget: THREE.Vector3 = new THREE.Vector3();
+  private frameAnimTime: number = 0;
+  private readonly frameAnimDuration: number = 0.4;
+
   constructor(container: HTMLElement) {
     this.scene = new THREE.Scene();
     this.clock = new THREE.Clock();
@@ -60,16 +69,42 @@ export class SceneManager {
       RIGHT: THREE.MOUSE.PAN,
     };
 
-    // Middle mouse button click: center view on tree and scale zoom to view whole tree
-    const onMiddleClick = (ev: MouseEvent) => {
+    // Cancel smooth framing animation if user interacts manually
+    this.controls.addEventListener('start', () => {
+      this.isFraming = false;
+    });
+
+    let lastMiddleActionTime = 0;
+    const handleMiddleAction = (ev: MouseEvent | PointerEvent) => {
       if (ev.button === 1) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        this.frameTree();
+        const onUI = (ev.target as HTMLElement)?.closest?.('.tp-dfwv');
+        if (!onUI) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          ev.stopImmediatePropagation();
+          const now = performance.now();
+          if (now - lastMiddleActionTime > 200) {
+            lastMiddleActionTime = now;
+            this.frameTree(undefined, true);
+          }
+        }
       }
     };
-    this.renderer.domElement.addEventListener('pointerdown', onMiddleClick);
-    this.renderer.domElement.addEventListener('auxclick', onMiddleClick);
+
+    // Capture on window to prevent Chromium/Windows auto-scroll and trigger centering
+    window.addEventListener('mousedown', handleMiddleAction, { capture: true, passive: false });
+    window.addEventListener('pointerdown', handleMiddleAction, { capture: true, passive: false });
+    window.addEventListener('auxclick', handleMiddleAction, { capture: true, passive: false });
+
+    // Keyboard shortcuts: 'F' (Focus) and 'C' (Center) for rapid view framing
+    window.addEventListener('keydown', (ev: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      if (ev.key === 'f' || ev.key === 'F' || ev.key === 'c' || ev.key === 'C') {
+        ev.preventDefault();
+        this.frameTree(undefined, true);
+      }
+    });
 
     // Tree Group
     this.treeGroup = new THREE.Group();
@@ -189,7 +224,7 @@ export class SceneManager {
   /**
    * Center view on tree and scale zoom to fit the entire tree comfortably
    */
-  public frameTree(treeHeight?: number): void {
+  public frameTree(treeHeight?: number, smooth: boolean = false): void {
     const box = new THREE.Box3();
 
     // Compute bounding box encompassing branches and foliage
@@ -230,16 +265,51 @@ export class SceneManager {
     }
     offset.normalize().multiplyScalar(targetDist);
 
-    this.controls.target.copy(center);
-    this.camera.position.copy(center).add(offset);
+    const targetCameraPos = center.clone().add(offset);
+
+    // Update clipping planes
     this.camera.near = Math.max(0.1, targetDist * 0.01);
     this.camera.far = Math.max(500, targetDist * 15);
     this.camera.updateProjectionMatrix();
-    this.controls.update();
+
+    // Reset residual damping momentum
+    if ((this.controls as any)._panOffset) (this.controls as any)._panOffset.set(0, 0, 0);
+    if ((this.controls as any)._sphericalDelta) (this.controls as any)._sphericalDelta.set(0, 0, 0);
+
+    if (!smooth) {
+      this.isFraming = false;
+      this.controls.target.copy(center);
+      this.camera.position.copy(targetCameraPos);
+      this.controls.update();
+    } else {
+      this.frameStartCamera.copy(this.camera.position);
+      this.frameStartTarget.copy(this.controls.target);
+      this.frameEndCamera.copy(targetCameraPos);
+      this.frameEndTarget.copy(center);
+      this.frameAnimTime = 0;
+      this.isFraming = true;
+    }
   }
 
   public update(params: TreeParameters): void {
     const dt = this.clock.getDelta();
+
+    // Smooth framing animation
+    if (this.isFraming) {
+      this.frameAnimTime += dt;
+      const progress = Math.min(1.0, this.frameAnimTime / this.frameAnimDuration);
+      const ease = 1 - Math.pow(1 - progress, 3); // Cubic ease-out
+
+      this.camera.position.lerpVectors(this.frameStartCamera, this.frameEndCamera, ease);
+      this.controls.target.lerpVectors(this.frameStartTarget, this.frameEndTarget, ease);
+
+      if ((this.controls as any)._panOffset) (this.controls as any)._panOffset.set(0, 0, 0);
+      if ((this.controls as any)._sphericalDelta) (this.controls as any)._sphericalDelta.set(0, 0, 0);
+
+      if (progress >= 1.0) {
+        this.isFraming = false;
+      }
+    }
 
     // Procedural wind animation
     if (params.windEnabled && params.windStrength > 0) {
